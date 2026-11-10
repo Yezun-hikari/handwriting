@@ -4,12 +4,14 @@ import { readBytes, TEMPLATE_URL } from '../goodnotes/__tests__/fs.ts';
 import { layoutText, makeSyntheticGlyphs } from '../layout/index.ts';
 import { buildGoodnotesFile, progressFraction, type BuildProgress, type WorkerReply, type WorkerRequest } from './convert-build.ts';
 import { buildInline, buildInWorker } from './convert-deps.ts';
+import { PAPERS, type PaperId } from '../types.ts';
+import { renderPreviewSvg } from '../layout/index.ts';
 import { MAX_TEXT_CHARS, previewDelay, previewPrefix, PREVIEW_CHARS } from './convert-screen.ts';
 
 const glyphs = makeSyntheticGlyphs(1);
 const template = readBytes(TEMPLATE_URL);
 const longText = (n: number) => 'Ein Satz mit einigen Wörtern für die Seite. '.repeat(Math.ceil(n / 44)).slice(0, n);
-const req = (text: string) => ({ text, glyphs, headingWidthMm: 0.7, bodyWidthMm: 0.35, template });
+const req = (text: string) => ({ text, glyphs, headingWidthMm: 0.7, bodyWidthMm: 0.35, paper: 'ruled-yellow' as const, template });
 
 describe('text limits and preview', () => {
   it('limits text to a sane size and previews only a prefix', () => {
@@ -83,5 +85,19 @@ describe('building the Goodnotes file', () => {
     ac.abort();
     await expect(p).rejects.toThrow();
     expect(terminated).toBe(true);
+  });
+});
+
+describe('paper templates', () => {
+  it.each(Object.keys(PAPERS) as PaperId[])('%s: template exists, file is written on its lines', async (paper) => {
+    const tpl = readBytes(new URL(`../../public/template/${PAPERS[paper].file}.goodnotes`, import.meta.url));
+    const r = await buildGoodnotesFile({ ...req(longText(3000)), paper, template: tpl });
+    const pages = decodeGoodnotes(r.bytes).pages;
+    expect(pages).toHaveLength(r.pages);
+    const p = PAPERS[paper];
+    const ys = pages[0].strokes.flatMap((s) => s.points.map((q) => q.y));
+    expect(Math.min(...ys)).toBeGreaterThan(p.firstLineY - 2 * p.pitch);
+    expect(Math.max(...ys)).toBeLessThan(p.firstLineY + p.lineCount * p.pitch);
+    expect(renderPreviewSvg({ pages: [] }, 0, p)).toContain(p.white ? 'rgb(255,255,255)' : 'rgb(248,247,233)');
   });
 });

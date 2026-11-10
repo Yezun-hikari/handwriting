@@ -17,6 +17,9 @@ export interface PaperGeometry {
   lineCount: number;
   marginLeft: number;
   marginRight: number;
+  /** Preview only: white instead of yellow paper; grid (rules every `pitch` across the whole page, both directions). */
+  white?: boolean;
+  grid?: boolean;
 }
 
 /** Jitter amplitudes (maximum deviation). Set a field to 0 to disable it. */

@@ -1,6 +1,6 @@
 import { allGlyphs, describeStoreError, ensureLoaded } from '../store/index.ts';
 import { clampPenMm, loadSettings, PEN_MAX_MM, PEN_MIN_MM, saveSettings } from '../store/settings.ts';
-import type { DocumentContent } from '../types.ts';
+import { isPaperId, PAPERS, type DocumentContent, type PaperId } from '../types.ts';
 import { progressFraction, progressText, type BuildProgress } from './convert-build.ts';
 import { convertDeps, type ConvertDeps, type ConvertOptions } from './convert-deps.ts';
 import { button, h, toast } from './dom.ts';
@@ -53,6 +53,8 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
         h('input', { type: 'number', id, min: PEN_MIN_MM, max: PEN_MAX_MM, step: 0.05, value: v, inputmode: 'decimal' });
       const headW = numInput('head-w', s.headingWidthMm);
       const bodyW = numInput('body-w', s.bodyWidthMm);
+      const paperSel = h('select', { id: 'paper' });
+      for (const [id, p] of Object.entries(PAPERS)) paperSel.append(h('option', { value: id, selected: id === s.paper }, p.label));
 
       const msg = h('p', { class: 'msg', role: 'status' });
       const limitMsg = h('p', { class: 'missing limit-msg' });
@@ -61,6 +63,7 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
       const pageLabel = h('span', { class: 'muted page-label' });
       const prev = button('←', () => showPage(page - 1), { 'aria-label': 'Vorherige Seite', class: 'btn icon' });
       const next = button('→', () => showPage(page + 1), { 'aria-label': 'Nächste Seite', class: 'btn icon' });
+      const pagerNav = h('span', { class: 'pager-nav' }, prev, pageLabel, next);
       const download = button('Goodnotes-Datei herunterladen', () => void doDownload(), { class: 'btn primary' });
       const buildFill = h('div', { class: 'progress-fill' });
       const buildBar = h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': 'Fortschritt' }, buildFill);
@@ -87,6 +90,7 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
             h(
               'div',
               { class: 'options' },
+              h('label', { for: 'paper', class: 'paper-option' }, h('span', { class: 'eyebrow', text: 'Papier' }), paperSel),
               h('label', { for: 'head-w' }, h('span', { class: 'eyebrow' }, 'Stiftbreite Überschrift', h('span', { class: 'sr-only', text: ' (mm)' })), h('span', { class: 'unit-input' }, headW, h('span', { class: 'unit', 'aria-hidden': 'true', text: 'mm' }))),
               h('label', { for: 'body-w' }, h('span', { class: 'eyebrow' }, 'Stiftbreite Text', h('span', { class: 'sr-only', text: ' (mm)' })), h('span', { class: 'unit-input' }, bodyW, h('span', { class: 'unit', 'aria-hidden': 'true', text: 'mm' }))),
             ),
@@ -94,7 +98,7 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
             missingEl,
             h('div', { class: 'download-row' }, download, buildBox),
           ),
-          h('div', { class: 'convert-preview' }, h('div', { class: 'pager' }, h('span', { class: 'eyebrow', text: 'Vorschau' }), h('span', { class: 'pager-nav' }, prev, pageLabel, next)), preview),
+          h('div', { class: 'convert-preview' }, h('div', { class: 'pager' }, h('span', { class: 'eyebrow', text: 'Vorschau' }), pagerNav), preview),
         ),
       );
 
@@ -112,10 +116,12 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
         msg.classList.toggle('error', err);
       }
 
-      const widths = (): ConvertOptions => {
-        const o = { headingWidthMm: clampPenMm(headW.value, s.headingWidthMm), bodyWidthMm: clampPenMm(bodyW.value, s.bodyWidthMm) };
-        return o;
-      };
+      const paper = (): PaperId => (isPaperId(paperSel.value) ? paperSel.value : s.paper);
+      const widths = (): ConvertOptions => ({
+        headingWidthMm: clampPenMm(headW.value, s.headingWidthMm),
+        bodyWidthMm: clampPenMm(bodyW.value, s.bodyWidthMm),
+        paper: paper(),
+      });
 
       function checkLength(): void {
         limitMsg.textContent = text.value.length >= MAX_TEXT_CHARS ? TOO_LONG_MSG : '';
@@ -207,11 +213,12 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
         preview.replaceChildren();
         const n = doc?.pages.length ?? 0;
         pageLabel.textContent = n ? `Seite ${page + 1} von ${n < totalPages ? `${totalPages} (Vorschau)` : n}` : '';
+        pagerNav.hidden = Math.max(n, totalPages) <= 1; // one page: nothing to switch
         prev.disabled = !n || page <= 0;
         next.disabled = !n || page >= n - 1;
         download.disabled = !totalPages || !!building;
         if (!doc || !n) return;
-        const out = deps.preview(doc, page);
+        const out = deps.preview(doc, page, paper());
         if (typeof out === 'string') {
           // Shown as <img>: SVG in an image context cannot run scripts or touch the DOM.
           blobUrl = URL.createObjectURL(new Blob([out], { type: 'image/svg+xml' }));
@@ -228,17 +235,23 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
         buildBar.setAttribute('aria-valuenow', String(pct));
       }
 
-      let templateBytes: Promise<Uint8Array> | null = null;
-      const template = (): Promise<Uint8Array> =>
-        (templateBytes ??= fetch(deps.templateUrl)
-          .then(async (res) => {
-            if (!res.ok) throw new Error(`Vorlage nicht gefunden (${res.status})`);
-            return new Uint8Array(await res.arrayBuffer());
-          })
-          .catch((e: unknown) => {
-            templateBytes = null;
-            throw e;
-          }));
+      const templates = new Map<PaperId, Promise<Uint8Array>>();
+      const template = (p: PaperId): Promise<Uint8Array> => {
+        let t = templates.get(p);
+        if (!t) {
+          t = fetch(deps.templateUrl(p))
+            .then(async (res) => {
+              if (!res.ok) throw new Error(`Vorlage nicht gefunden (${res.status})`);
+              return new Uint8Array(await res.arrayBuffer());
+            })
+            .catch((e: unknown) => {
+              templates.delete(p);
+              throw e;
+            });
+          templates.set(p, t);
+        }
+        return t;
+      };
 
       async function doDownload(): Promise<void> {
         if (building) return;
@@ -251,7 +264,7 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
         const req = { text: t, glyphs: allGlyphs(), ...widths() };
         showProgress({ stage: 'layout' });
         try {
-          const blob = await deps.build({ ...req, template: await template() }, (p) => !ac.signal.aborted && showProgress(p), ac.signal);
+          const blob = await deps.build({ ...req, template: await template(req.paper) }, (p) => !ac.signal.aborted && showProgress(p), ac.signal);
           if (ac.signal.aborted) return;
           const url = URL.createObjectURL(blob);
           const a = h('a', { href: url, download: fileName(t) });
@@ -292,6 +305,10 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
         reader.readAsText(f, 'utf-8');
       });
       text.addEventListener('input', schedule);
+      paperSel.addEventListener('change', () => {
+        saveSettings({ paper: paper() });
+        run();
+      });
       for (const inp of [headW, bodyW])
         inp.addEventListener('change', () => {
           const o = widths();

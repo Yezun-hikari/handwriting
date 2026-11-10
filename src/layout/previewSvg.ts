@@ -2,6 +2,7 @@ import type { DocumentContent, Rgba } from '../types.ts';
 import type { PaperGeometry } from './layout.ts';
 
 const PAPER_RGB = { r: 0.973, g: 0.969, b: 0.914 };
+const WHITE_RGB = { r: 1, g: 1, b: 1 };
 const RULE_RGB = { r: 0.816, g: 0.824, b: 0.827 };
 /** 0.5 pt in canvas units (pt × 11/6). */
 const RULE_THICKNESS = 0.5 * (11 / 6);
@@ -29,11 +30,17 @@ export function renderPreviewSvg(doc: DocumentContent, pageIndex: number, paper:
   const H = n(paper.height);
   const out: string[] = [];
   out.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">`);
-  out.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="${rgb(PAPER_RGB)}"/>`);
-  const count = Math.max(0, Math.min(1000, Math.floor(Number(paper.lineCount) || 0)));
-  for (let i = 0; i < count; i++) {
-    const y = paper.firstLineY + i * paper.pitch;
-    out.push(`<rect x="0" y="${n(y - RULE_THICKNESS / 2)}" width="${W}" height="${n(RULE_THICKNESS, 4)}" fill="${rgb(RULE_RGB)}"/>`);
+  out.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="${rgb(paper.white ? WHITE_RGB : PAPER_RGB)}"/>`);
+  const rule = (x: number, y: number, w: number | string, h: number | string): string =>
+    `<rect x="${n(x)}" y="${n(y)}" width="${typeof w === 'string' ? w : n(w, 4)}" height="${typeof h === 'string' ? h : n(h, 4)}" fill="${rgb(RULE_RGB)}"/>`;
+  if (paper.grid && paper.pitch > 1) {
+    // Grid rules continue the text lines over the whole page (rule top edge = line y, as on the ruled papers).
+    const off = paper.firstLineY % paper.pitch;
+    for (let y = off; y < paper.height; y += paper.pitch) out.push(rule(0, y, W, RULE_THICKNESS));
+    for (let x = off; x < paper.width; x += paper.pitch) out.push(rule(x, 0, RULE_THICKNESS, H));
+  } else {
+    const count = Math.max(0, Math.min(1000, Math.floor(Number(paper.lineCount) || 0)));
+    for (let i = 0; i < count; i++) out.push(rule(0, paper.firstLineY + i * paper.pitch - RULE_THICKNESS / 2, W, RULE_THICKNESS));
   }
   const page = doc?.pages?.[pageIndex];
   if (page) {

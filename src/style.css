@@ -645,7 +645,8 @@ main {
   color: var(--muted);
 }
 input[type='text'],
-input[type='number'] {
+input[type='number'],
+select {
   font: inherit;
   color: var(--text);
   background: transparent;
@@ -656,13 +657,18 @@ input[type='number'] {
   min-height: 44px;
 }
 input[type='text']:focus-visible,
-input[type='number']:focus-visible {
+input[type='number']:focus-visible,
+select:focus-visible {
   outline: none;
   border-bottom-color: var(--accent);
   box-shadow: 0 1px 0 0 var(--accent);
 }
 input[type='number'] {
   font-variant-numeric: tabular-nums;
+}
+select option {
+  color: initial;
+  background: initial;
 }
 
 /* Overview: a quiet typographic grid */
@@ -835,6 +841,9 @@ textarea:focus-visible {
 .options label {
   display: grid;
   gap: 2px;
+}
+.options .paper-option {
+  flex-basis: 100%;
 }
 .unit-input {
   display: inline-flex;

@@ -80,5 +80,25 @@ export const PAPER_A4_RULED = {
   marginRight: 36,
 } as const;
 
+const pt = (v: number): number => v * (11 / 6);
+
+/**
+ * Paper templates the user can choose (public/template/<file>.goodnotes, derived with
+ * src/goodnotes/tools/make-paper-variants.mjs). Rules measured from the Goodnotes PDFs (pt from top):
+ * narrow 17.5 pt from 50 (45 lines), wide 25 pt from 49.5 (32 lines), grid 16 pt from 15.5 in both
+ * directions; on grid paper text starts on the third line, leaving a top margin like the ruled papers.
+ */
+export const PAPERS = {
+  'ruled-yellow': { label: 'Liniert schmal · gelb', file: 'a4-ruled-yellow', white: false, grid: false, ...PAPER_A4_RULED },
+  'ruled-white': { label: 'Liniert schmal · weiß', file: 'a4-ruled-white', white: true, grid: false, ...PAPER_A4_RULED },
+  'wide-yellow': { label: 'Liniert breit · gelb', file: 'a4-wide-yellow', white: false, grid: false, ...PAPER_A4_RULED, pitch: pt(25), firstLineY: pt(49.5), lineCount: 32 },
+  'wide-white': { label: 'Liniert breit · weiß', file: 'a4-wide-white', white: true, grid: false, ...PAPER_A4_RULED, pitch: pt(25), firstLineY: pt(49.5), lineCount: 32 },
+  'grid-yellow': { label: 'Kariert · gelb', file: 'a4-grid-yellow', white: false, grid: true, ...PAPER_A4_RULED, pitch: pt(16), firstLineY: pt(47.5), lineCount: 49 },
+  'grid-white': { label: 'Kariert · weiß', file: 'a4-grid-white', white: true, grid: true, ...PAPER_A4_RULED, pitch: pt(16), firstLineY: pt(47.5), lineCount: 49 },
+} as const;
+export type PaperId = keyof typeof PAPERS;
+export const DEFAULT_PAPER: PaperId = 'ruled-yellow';
+export const isPaperId = (v: unknown): v is PaperId => typeof v === 'string' && Object.hasOwn(PAPERS, v);
+
 /** mm → canvas units. */
 export const mmToCanvas = (mm: number): number => (mm / 25.4) * 72 * (11 / 6);

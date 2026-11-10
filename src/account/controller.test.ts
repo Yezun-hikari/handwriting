@@ -16,7 +16,7 @@ class Mem {
 const g = (char: string, variant: number, x = 0.2) => ({ char, variant, strokes: [[{ x: 0, y: 0 }, { x, y: -0.4 }]], advance: 0.3 });
 const REG: AuthUser = { id: 'u1', username: 'anna', isGuest: false };
 const GUEST: AuthUser = { id: 'g1', username: null, isGuest: true };
-const DEFAULT_ROAMING: RoamingSettings = { ligatures: ['ch'], rightGap: 0.12, headingWidthMm: 0.7, bodyWidthMm: 0.35 };
+const DEFAULT_ROAMING: RoamingSettings = { ligatures: ['ch'], rightGap: 0.12, headingWidthMm: 0.7, bodyWidthMm: 0.35, paper: 'ruled-yellow' };
 
 function setup(opts: { configured?: boolean; user?: AuthUser | null; local?: ReturnType<typeof g>[]; decision?: MergeDecision } = {}) {
   const db = new FakeDb();

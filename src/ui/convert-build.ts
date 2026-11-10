@@ -5,13 +5,15 @@
  */
 import { writeGoodnotes } from '../goodnotes/index.ts';
 import { layoutText } from '../layout/index.ts';
-import type { Glyph } from '../types.ts';
+import { PAPERS, type Glyph, type PaperId } from '../types.ts';
 
 export interface BuildRequest {
   text: string;
   glyphs: Glyph[];
   headingWidthMm: number;
   bodyWidthMm: number;
+  /** Must match `template` (layout uses its line geometry). */
+  paper: PaperId;
   template: Uint8Array;
 }
 
@@ -25,7 +27,7 @@ export interface BuildResult {
 
 export async function buildGoodnotesFile(req: BuildRequest, onProgress?: (p: BuildProgress) => void): Promise<BuildResult> {
   onProgress?.({ stage: 'layout' });
-  const r = layoutText(req.text, req.glyphs, { headingWidthMm: req.headingWidthMm, bodyWidthMm: req.bodyWidthMm });
+  const r = layoutText(req.text, req.glyphs, { headingWidthMm: req.headingWidthMm, bodyWidthMm: req.bodyWidthMm, paper: PAPERS[req.paper] });
   const bytes = await writeGoodnotes(req.template, r.doc, (done, total) => {
     onProgress?.({ stage: 'pages', done, total });
     if (done === total) onProgress?.({ stage: 'zip' });

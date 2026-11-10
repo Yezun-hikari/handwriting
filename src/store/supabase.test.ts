@@ -68,8 +68,8 @@ describe('SupabaseSettingsStore', () => {
     const db = new FakeDb();
     const s = new SupabaseSettingsStore(db.client(), 'u1');
     expect(await s.load()).toBeNull();
-    await s.save({ ligatures: ['ch'], rightGap: 0.2, headingWidthMm: 0.8, bodyWidthMm: 0.3 });
-    expect(await s.load()).toEqual({ ligatures: ['ch'], rightGap: 0.2, headingWidthMm: 0.8, bodyWidthMm: 0.3 });
+    await s.save({ ligatures: ['ch'], rightGap: 0.2, headingWidthMm: 0.8, bodyWidthMm: 0.3, paper: 'grid-white' });
+    expect(await s.load()).toEqual({ ligatures: ['ch'], rightGap: 0.2, headingWidthMm: 0.8, bodyWidthMm: 0.3, paper: 'grid-white' });
     db.rows('handwriting_settings')[0].settings = { rightGap: 'x', bodyWidthMm: 0.5, inputMode: 'pen' };
     expect(await s.load()).toEqual({ bodyWidthMm: 0.5 });
     expect(db.calls).toContainEqual(['upsert', 1, 'user_id']);

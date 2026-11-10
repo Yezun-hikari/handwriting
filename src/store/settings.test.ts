@@ -41,6 +41,8 @@ describe('settings split', () => {
   });
   it('parseRoaming drops invalid fields', () => {
     expect(parseRoaming({ rightGap: 5, ligatures: [1], bodyWidthMm: 0.4, inputMode: 'pen' })).toEqual({ bodyWidthMm: 0.4 });
+    expect(parseRoaming({ paper: 'grid-yellow' })).toEqual({ paper: 'grid-yellow' });
+    expect(parseRoaming({ paper: 'toString' })).toEqual({});
     expect(parseRoaming(null)).toEqual({});
   });
   it('parseRoaming rejects oversized objects and over-long ligatures (code points)', () => {
@@ -71,8 +73,8 @@ describe('pen widths', () => {
   it('the account store saves sanitized settings that fit the table', async () => {
     const db = new FakeDb();
     const st = new SupabaseSettingsStore(db.client(), 'u1');
-    await st.save({ ligatures: ['sch', 'abcdefghi'], rightGap: 0.1, headingWidthMm: 7, bodyWidthMm: 0.05 });
-    expect(db.rows(SETTINGS_TABLE)[0].settings).toEqual({ ligatures: ['sch'], rightGap: 0.1, headingWidthMm: 2, bodyWidthMm: 0.1 });
-    expect(fitsAccountSettings(sanitizeRoaming({ ligatures: [], rightGap: 0, headingWidthMm: 1, bodyWidthMm: 1 }))).toBe(true);
+    await st.save({ ligatures: ['sch', 'abcdefghi'], rightGap: 0.1, headingWidthMm: 7, bodyWidthMm: 0.05, paper: 'nope' as never });
+    expect(db.rows(SETTINGS_TABLE)[0].settings).toEqual({ ligatures: ['sch'], rightGap: 0.1, headingWidthMm: 2, bodyWidthMm: 0.1, paper: 'ruled-yellow' });
+    expect(fitsAccountSettings(sanitizeRoaming({ ligatures: [], rightGap: 0, headingWidthMm: 1, bodyWidthMm: 1, paper: 'wide-white' }))).toBe(true);
   });
 });

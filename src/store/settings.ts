@@ -1,9 +1,10 @@
 import { DEFAULT_LIGATURES } from '../capture/charset.ts';
 import type { InputMode } from '../capture/input-policy.ts';
+import { DEFAULT_PAPER, isPaperId, type PaperId } from '../types.ts';
 import { DB_LIMITS, jsonBytes, validChar } from './validate.ts';
 
 /**
- * UI settings. The *roaming* part (ligature list, right gap, stroke widths) belongs to the handwriting and follows a
+ * UI settings. The *roaming* part (ligature list, right gap, stroke widths, paper) belongs to the handwriting and follows a
  * registered account (table handwriting_settings); per-device things (input mode: Pencil vs. finger) stay local.
  * localStorage is always the working copy, so loadSettings() stays synchronous.
  */
@@ -14,6 +15,8 @@ export interface RoamingSettings {
   /** Convert page: stroke widths in mm. */
   headingWidthMm: number;
   bodyWidthMm: number;
+  /** Convert page: paper template. */
+  paper: PaperId;
 }
 
 export interface LocalSettings {
@@ -22,7 +25,7 @@ export interface LocalSettings {
 
 export type Settings = RoamingSettings & LocalSettings;
 
-export const ROAMING_KEYS = ['ligatures', 'rightGap', 'headingWidthMm', 'bodyWidthMm'] as const satisfies readonly (keyof RoamingSettings)[];
+export const ROAMING_KEYS = ['ligatures', 'rightGap', 'headingWidthMm', 'bodyWidthMm', 'paper'] as const satisfies readonly (keyof RoamingSettings)[];
 
 export const SETTINGS_KEY = 'handwriting-settings';
 
@@ -32,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   inputMode: 'auto',
   headingWidthMm: 0.7,
   bodyWidthMm: 0.35,
+  paper: DEFAULT_PAPER,
 };
 
 export const MAX_LIGATURES = 40;
@@ -63,6 +67,7 @@ export function parseRoaming(v: unknown): Partial<RoamingSettings> {
   if (inRange(o.rightGap, 0, 0.6)) out.rightGap = o.rightGap;
   if (inRange(o.headingWidthMm, PEN_MIN_MM, PEN_MAX_MM)) out.headingWidthMm = o.headingWidthMm;
   if (inRange(o.bodyWidthMm, PEN_MIN_MM, PEN_MAX_MM)) out.bodyWidthMm = o.bodyWidthMm;
+  if (isPaperId(o.paper)) out.paper = o.paper;
   return out;
 }
 
@@ -74,6 +79,7 @@ export function sanitizeRoaming(s: RoamingSettings): RoamingSettings {
     rightGap: clamp(s.rightGap, 0, 0.6, d.rightGap),
     headingWidthMm: clampPenMm(s.headingWidthMm, d.headingWidthMm),
     bodyWidthMm: clampPenMm(s.bodyWidthMm, d.bodyWidthMm),
+    paper: isPaperId(s.paper) ? s.paper : d.paper,
   };
 }
 
@@ -82,6 +88,7 @@ export const roamingOf = (s: Settings): RoamingSettings => ({
   rightGap: s.rightGap,
   headingWidthMm: s.headingWidthMm,
   bodyWidthMm: s.bodyWidthMm,
+  paper: s.paper,
 });
 
 function readRaw(): Record<string, unknown> {
@@ -114,6 +121,7 @@ export function loadSettings(): Settings {
     inputMode: o.inputMode === 'pen' || o.inputMode === 'any' || o.inputMode === 'auto' ? o.inputMode : d.inputMode,
     headingWidthMm: clamp(o.headingWidthMm, PEN_MIN_MM, PEN_MAX_MM, d.headingWidthMm),
     bodyWidthMm: clamp(o.bodyWidthMm, PEN_MIN_MM, PEN_MAX_MM, d.bodyWidthMm),
+    paper: isPaperId(o.paper) ? o.paper : d.paper,
   };
 }
 
