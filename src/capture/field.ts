@@ -30,7 +30,7 @@ export class CaptureField {
   private dpr = 1;
   private inkColor = '#1e1b1b';
   private guideColor = '#888';
-  private accentColor = '#5b4cf0';
+  private baselineColor = '#7d8ca3';
   private readonly ac = new AbortController();
 
   constructor(private readonly opts: FieldOptions) {
@@ -94,7 +94,7 @@ export class CaptureField {
     const cs = getComputedStyle(this.canvas);
     this.inkColor = cs.getPropertyValue('--ink').trim() || this.inkColor;
     this.guideColor = cs.getPropertyValue('--guide').trim() || this.guideColor;
-    this.accentColor = cs.getPropertyValue('--accent').trim() || this.accentColor;
+    this.baselineColor = cs.getPropertyValue('--guide-strong').trim() || this.baselineColor;
   }
 
   redraw(): void {
@@ -108,10 +108,11 @@ export class CaptureField {
       ctx.beginPath();
       ctx.moveTo(0, y);
       ctx.lineTo(w, y);
-      ctx.lineWidth = g.kind === 'baseline' ? 2 : 1;
-      ctx.strokeStyle = g.kind === 'baseline' ? this.accentColor : this.guideColor;
-      ctx.globalAlpha = g.kind === 'baseline' ? 0.8 : g.kind === 'ruled' ? 0.5 : 0.45;
-      ctx.setLineDash(g.kind === 'baseline' || g.kind === 'ruled' ? [] : [4, 5]);
+      // Notebook look: faint ruled lines, a slightly stronger baseline, dotted helper lines.
+      ctx.lineWidth = g.kind === 'baseline' ? 1.25 : 1;
+      ctx.strokeStyle = g.kind === 'baseline' ? this.baselineColor : this.guideColor;
+      ctx.globalAlpha = g.kind === 'baseline' ? 1 : g.kind === 'ruled' ? 0.9 : 0.75;
+      ctx.setLineDash(g.kind === 'baseline' || g.kind === 'ruled' ? [] : [1, 4]);
       ctx.stroke();
     }
     ctx.setLineDash([]);
