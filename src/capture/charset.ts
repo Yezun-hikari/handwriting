@@ -27,18 +27,27 @@ export const BASE_GROUPS: readonly CharGroup[] = [
   },
 ];
 
+const BASE_CHARS: ReadonlySet<string> = new Set(BASE_GROUPS.flatMap((g) => g.chars));
+
+/** `ligatures` (setting) holds the user's own entries: single extra characters and ligatures of 2–4 characters. */
 export function groupsWith(ligatures: readonly string[]): CharGroup[] {
-  return [...BASE_GROUPS, { id: 'lig', label: 'Ligaturen', chars: [...ligatures] }];
+  const extra = ligatures.filter((s) => [...s].length === 1 && !BASE_CHARS.has(s));
+  const ligs = ligatures.filter((s) => [...s].length > 1);
+  return [
+    ...BASE_GROUPS,
+    ...(extra.length ? [{ id: 'extra', label: 'Eigene Zeichen', chars: extra }] : []),
+    { id: 'lig', label: 'Ligaturen', chars: ligs },
+  ];
 }
 
-/** Clean a user-entered ligature list: NFC, trimmed, 2–4 visible chars, no whitespace, unique. */
+/** Clean a user-entered list of extra chars / ligatures: NFC, 1–4 visible chars, no whitespace, not in the base set, unique. */
 export function parseLigatures(input: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of input.split(/[\s,;]+/)) {
     const s = raw.normalize('NFC');
     const len = [...s].length;
-    if (len < 2 || len > 4 || seen.has(s)) continue;
+    if (len < 1 || len > 4 || seen.has(s) || BASE_CHARS.has(s)) continue;
     seen.add(s);
     out.push(s);
   }
@@ -48,6 +57,7 @@ export function parseLigatures(input: string): string[] {
 /** Human readable name for screen readers / headings. */
 export function describeChar(c: string): string {
   if ([...c].length > 1) return `Ligatur „${c}“`;
+  if (!BASE_CHARS.has(c)) return `Eigenes Zeichen ${c}`;
   if (/[a-zäöü]/.test(c)) return `Kleinbuchstabe ${c}`;
   if (c === 'ß') return 'Eszett ß';
   if (/[A-ZÄÖÜ]/.test(c)) return `Großbuchstabe ${c}`;

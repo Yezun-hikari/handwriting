@@ -859,6 +859,16 @@ textarea:focus-visible {
 .missing:empty {
   display: none;
 }
+.missing-char {
+  display: inline-block;
+  min-width: 1.8em;
+  padding: 0 0.3em;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+  text-align: center;
+  text-decoration: none;
+}
 .download-row {
   display: flex;
   flex-wrap: wrap;

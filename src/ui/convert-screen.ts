@@ -167,13 +167,26 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
               ? label
               : `${label} – die Vorschau zeigt ${pages.length === 1 ? 'nur die erste' : `die ersten ${pages.length}`}.`,
           );
-          missingEl.textContent = missing.length ? `Nicht erfasste Zeichen (werden ausgelassen): ${missing.join(' ')}` : '';
+          showMissing(missing);
         } catch (e) {
           doc = null;
           totalPages = 0;
           setMsg(`Umwandeln fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`, true);
         }
         renderPreview();
+      }
+
+      /** Missing chars as links to the capture page, which adds a char that is not in the set yet. */
+      function showMissing(missing: string[]): void {
+        const chars = missing.filter((c) => !/\s/u.test(c));
+        missingEl.replaceChildren();
+        if (!chars.length) return;
+        missingEl.append('Nicht erfasste Zeichen (werden ausgelassen) – zum Hinzufügen antippen: ');
+        for (const c of chars)
+          missingEl.append(
+            h('a', { class: 'missing-char', href: `#/schrift?${new URLSearchParams({ c, v: '0', add: '1' })}`, 'aria-label': `„${c}“ hinzufügen und schreiben` }, c),
+            ' ',
+          );
       }
 
       const schedule = (): void => {

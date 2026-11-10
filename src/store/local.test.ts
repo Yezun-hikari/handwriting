@@ -40,5 +40,6 @@ describe('LocalGlyphStore', () => {
 describe('parseLigatures', () => {
   it('cleans the list', () => {
     expect(parseLigatures(' ch, ck  sch;x ch toolongg ei')).toEqual(['ch', 'ck', 'sch', 'ei']);
+    expect(parseLigatures('§ Ω a ß §')).toEqual(['§', 'Ω']); // own single chars; base chars and duplicates dropped
   });
 });

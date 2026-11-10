@@ -15,7 +15,7 @@ import {
   removeGlyph,
   saveGlyph,
 } from '../store/index.ts';
-import { loadSettings, saveSettings, type Settings } from '../store/settings.ts';
+import { loadSettings, MAX_LIGATURES, saveSettings, type Settings } from '../store/settings.ts';
 import { storageHintEl } from './auth-hook.ts';
 import { button, h, toast } from './dom.ts';
 import { glyphSvg } from './glyph-svg.ts';
@@ -43,11 +43,19 @@ export const captureScreen: Screen = {
   title: 'Schrift erfassen',
   mount(root, params) {
     let settings: Settings = loadSettings();
+    const initial = params.get('c')?.normalize('NFC');
+    // `?add=1` (link from the convert page): a character not in the set yet becomes one of the user's own.
+    let added = false;
+    if (initial && params.has('add') && !groupsWith(settings.ligatures).some((g) => g.chars.includes(initial))) {
+      const list = parseLigatures([...settings.ligatures, initial].join(' '));
+      added = list.includes(initial);
+      if (added) settings = saveSettings({ ligatures: list });
+      else toast(`„${initial}“ kann nicht hinzugefügt werden (höchstens ${MAX_LIGATURES} eigene Einträge).`);
+    }
     let groups: CharGroup[] = groupsWith(settings.ligatures);
     let order: string[] = groups.flatMap((g) => g.chars);
     const gate = new PointerGate(settings.inputMode);
 
-    const initial = params.get('c')?.normalize('NFC');
     let char = initial && order.includes(initial) ? initial : order[0];
     let active = Math.min(VARIANTS - 1, Math.max(0, Number(params.get('v')) || 0));
     let slots: Slot[] = [];
@@ -349,7 +357,7 @@ export const captureScreen: Screen = {
         buildOverview();
         if (!order.includes(char)) showChar(order[0]);
         else updateProgress();
-        toast('Ligaturen gespeichert.');
+        toast('Eigene Zeichen gespeichert.');
       });
 
       return h(
@@ -366,7 +374,7 @@ export const captureScreen: Screen = {
         h(
           'div',
           { class: 'setting' },
-          h('label', { for: 'ligs', text: 'Ligaturen (durch Leerzeichen getrennt, 2–4 Zeichen)' }),
+          h('label', { for: 'ligs', text: 'Eigene Zeichen und Ligaturen (durch Leerzeichen getrennt, je 1–4 Zeichen, z. B. § # ch)' }),
           h('div', { class: 'row' }, lig, ligSave),
         ),
       );
@@ -405,6 +413,7 @@ export const captureScreen: Screen = {
     // ---------- start ----------
     bigChar.textContent = char;
     title.textContent = describeChar(char);
+    if (added) toast(`„${char}“ zu deinen Zeichen hinzugefügt.`);
     ensureLoaded()
       .catch((e: unknown) => toast(`Gespeicherte Schrift konnte nicht geladen werden. ${describeStoreError(e)}`))
       .finally(() => {

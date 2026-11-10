@@ -70,7 +70,7 @@ export const homeScreen: Screen = {
       progress.setAttribute('aria-label', status.textContent);
       const distinct = new Set(allGlyphs().map((g) => g.char)).size;
       statusSub.textContent =
-        `Ligaturen: ${ligDone} von ${ligs.length * VARIANTS} · ${distinct} verschiedene Zeichen erfasst` +
+        `Eigene Zeichen & Ligaturen: ${ligDone} von ${ligs.length * VARIANTS} · ${distinct} verschiedene Zeichen erfasst` +
         (done === 0 ? ' – leg los.' : done < total ? '' : ' – vollständig.');
     }
 
