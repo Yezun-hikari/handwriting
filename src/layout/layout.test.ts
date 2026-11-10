@@ -218,6 +218,24 @@ describe('missing characters', () => {
     const xLref = bbox([ref.doc.pages[0].strokes.at(-1)!]).minX;
     expect(xL).toBeGreaterThan(xLref + 10);
   });
+  it('treats glyphs with non-finite advance or points as missing', () => {
+    const ok = makeSyntheticGlyphs(1, ['a']);
+    const bad: Glyph[] = [
+      { char: 'b', variant: 0, strokes: [[{ x: 0, y: 0 }, { x: 0.2, y: -0.5 }]], advance: NaN },
+      { char: 'c', variant: 0, strokes: [[{ x: 0, y: 0 }, { x: Infinity, y: -0.5 }]], advance: 0.4 },
+      { char: 'd', variant: 0, strokes: [[{ x: 0, y: 0 }, { x: 1e308, y: -1e308 }]], advance: 0.4 },
+    ];
+    const r = layoutText('abcd', [...ok, ...bad], flat());
+    expect(r.missing).toEqual(['b', 'c', 'd']);
+    expect(r.stats.glyphsPlaced).toBe(1);
+    for (const st of r.doc.pages[0].strokes) for (const p of st.points) expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
+  });
+  it('uses a valid variant when another variant of the same char is broken', () => {
+    const ok = makeSyntheticGlyphs(1, ['a']);
+    const r = layoutText('aaaa', [...ok, { ...ok[0], variant: 1, advance: Infinity }], flat());
+    expect(r.missing).toEqual([]);
+    expect(r.stats.glyphsPlaced).toBe(4);
+  });
 });
 
 describe('renderPreviewSvg', () => {

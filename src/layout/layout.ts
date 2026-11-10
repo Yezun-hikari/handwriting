@@ -102,6 +102,19 @@ interface WrappedLine {
   placed: { unit: Unit; x: number }[];
 }
 
+/**
+ * A glyph that can be placed: finite advance and only finite points. Anything else (corrupt storage, NaN from a bad
+ * normalisation) is treated like a missing character instead of producing NaN coordinates in the file.
+ */
+function usableGlyph(g: Glyph): boolean {
+  if (typeof g.advance !== 'number' || !Number.isFinite(g.advance) || !Array.isArray(g.strokes)) return false;
+  for (const s of g.strokes) {
+    if (!Array.isArray(s)) return false;
+    for (const p of s) if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return false;
+  }
+  return true;
+}
+
 class GlyphIndex {
   private byKey = new Map<string, Glyph[]>();
   private lastVariant = new Map<string, number>();
@@ -110,7 +123,7 @@ class GlyphIndex {
   constructor(glyphs: Glyph[]) {
     let maxLen = 1;
     for (const g of glyphs) {
-      if (!g || typeof g.char !== 'string' || g.char.length === 0) continue;
+      if (!g || typeof g.char !== 'string' || g.char.length === 0 || !usableGlyph(g)) continue;
       const key = g.char.normalize('NFC');
       let list = this.byKey.get(key);
       if (!list) this.byKey.set(key, (list = []));
@@ -362,24 +375,32 @@ export function layoutText(text: string, glyphs: Glyph[], opts: LayoutOptions = 
       const cos = Math.cos(rot);
       const sin = Math.sin(rot);
       const localY = baseY + lineOffset + lineSlope * (originX - paper.marginLeft) + dy * unitPx;
-      let placedAny = false;
+      const placed: PageStroke[] = [];
+      let finite = true;
       for (const s of g.strokes) {
         if (!Array.isArray(s) || s.length === 0) continue;
         const pts: { x: number; y: number }[] = [];
         for (const p of s) {
-          if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
           const lx = (p.x - cx) * ds;
           const ly = p.y * ds;
           const rx = lx * cos - ly * sin;
           const ry = lx * sin + ly * cos;
-          pts.push({ x: r3(originX + (cx + rx) * unitPx), y: r3(localY + ry * unitPx) });
+          const px = r3(originX + (cx + rx) * unitPx);
+          const py = r3(localY + ry * unitPx);
+          if (!Number.isFinite(px) || !Number.isFinite(py)) finite = false;
+          pts.push({ x: px, y: py });
         }
-        if (pts.length === 0) continue;
-        const ps: PageStroke = { points: pts, width, color: { ...color } };
-        page.strokes.push(ps);
-        stats.strokes++;
-        placedAny = true;
+        placed.push({ points: pts, width, color: { ...color } });
       }
+      if (!finite) {
+        // Overflow (absurd coordinates): treat like a missing character rather than writing NaN/Infinity.
+        stats.missingOccurrences++;
+        missing.set(g.char, (missing.get(g.char) ?? 0) + 1);
+        continue;
+      }
+      for (const ps of placed) page.strokes.push(ps);
+      stats.strokes += placed.length;
+      const placedAny = placed.length > 0;
       if (placedAny || g.strokes.length === 0) stats.glyphsPlaced++;
     }
   }
