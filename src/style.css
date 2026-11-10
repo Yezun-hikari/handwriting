@@ -195,14 +195,15 @@ strong {
   }
 }
 .brand {
-  font-family: var(--serif);
-  font-size: 1.5rem;
-  font-weight: 450;
-  font-style: italic;
-  letter-spacing: -0.01em;
   color: var(--text);
   text-decoration: none;
   margin-right: auto;
+}
+.brand-mark {
+  height: 2.4rem;
+  width: auto;
+  /* The written baseline sits at 60 % of the drawing's height: put it on the nav's text baseline. */
+  vertical-align: -0.96rem;
 }
 .nav {
   display: flex;
