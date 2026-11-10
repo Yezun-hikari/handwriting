@@ -4,7 +4,17 @@ import { pitchForWidth } from '../capture/geometry.ts';
 import type { InputMode } from '../capture/input-policy.ts';
 import { buildGlyph } from '../capture/normalize.ts';
 import { PointerGate } from '../capture/pointer-gate.ts';
-import { countCaptured, describeStoreError, ensureLoaded, getGlyph, onGlyphsChange, removeGlyph, saveGlyph } from '../store/index.ts';
+import {
+  countCaptured,
+  describeStoreError,
+  ensureLoaded,
+  getGlyph,
+  glyphStoreGeneration,
+  onBeforeStoreSwitch,
+  onGlyphsChange,
+  removeGlyph,
+  saveGlyph,
+} from '../store/index.ts';
 import { loadSettings, saveSettings, type Settings } from '../store/settings.ts';
 import { storageHintEl } from './auth-hook.ts';
 import { button, h, toast } from './dom.ts';
@@ -41,6 +51,8 @@ export const captureScreen: Screen = {
     let char = initial && order.includes(initial) ? initial : order[0];
     let active = Math.min(VARIANTS - 1, Math.max(0, Number(params.get('v')) || 0));
     let slots: Slot[] = [];
+    /** Store generation the fields were filled from (see onBeforeStoreSwitch below). */
+    let shownGen = glyphStoreGeneration();
 
     // ---------- skeleton ----------
     const bigChar = h('div', { class: 'cap-char', 'aria-hidden': 'true' });
@@ -86,11 +98,14 @@ export const captureScreen: Screen = {
       clearTimeout(slot.timer);
       slot.timer = 0;
       const g = buildGlyph(char, slot.variant, slot.field.strokes, slot.field.frame, { rightGap: settings.rightGap });
+      const gen = glyphStoreGeneration();
       const p = g ? saveGlyph(g) : removeGlyph(char, slot.variant);
       return p.then(
-        () => setStatus(slot, g ? 'saved' : 'empty'),
+        () => {
+          if (gen === glyphStoreGeneration()) setStatus(slot, g ? 'saved' : 'empty');
+        },
         (err: unknown) => {
-          setStatus(slot, 'error');
+          if (gen === glyphStoreGeneration()) setStatus(slot, 'error');
           toast(`Speichern fehlgeschlagen. ${describeStoreError(err)}`);
         },
       );
@@ -143,7 +158,26 @@ export const captureScreen: Screen = {
         slots.push(slot);
       }
       slots.forEach((s) => s.field.redraw()); // now connected: picks up theme colours
+      shownGen = glyphStoreGeneration();
       setActive(active);
+    }
+
+    /** While another store loads, the fields show nothing editable, so no stale drawing can be saved into it. */
+    function setLoading(on: boolean): void {
+      fieldsEl.toggleAttribute('inert', on);
+      fieldsEl.setAttribute('aria-busy', String(on));
+      fieldsEl.classList.toggle('loading', on);
+    }
+
+    /** Re-reads every non-dirty field from the (new) store's cache. */
+    function reloadFields(): void {
+      shownGen = glyphStoreGeneration();
+      for (const s of slots) {
+        if (s.timer) continue; // unsaved edits of this store: keep
+        const g = getGlyph(char, s.variant);
+        s.field.setGlyph(g);
+        setStatus(s, g ? 'saved' : 'empty');
+      }
     }
 
     function setActive(v: number): void {
@@ -252,7 +286,28 @@ export const captureScreen: Screen = {
     const offGlyphs = onGlyphsChange(() => {
       updateProgress();
       if (tiles.size) tiles.forEach((_, c) => fillTile(c));
+      if (slots.length && shownGen !== glyphStoreGeneration()) {
+        // Store switched (sign-in / sign-out): drop the old store's drawings and wait for the new store's glyphs.
+        const gen = glyphStoreGeneration();
+        shownGen = gen;
+        for (const s of slots) {
+          clearTimeout(s.timer);
+          s.timer = 0;
+          s.field.setGlyph(undefined);
+          setStatus(s, 'empty');
+        }
+        setLoading(true);
+        ensureLoaded()
+          .catch((e: unknown) => toast(`Gespeicherte Schrift konnte nicht geladen werden. ${describeStoreError(e)}`))
+          .finally(() => {
+            if (!root.isConnected || gen !== glyphStoreGeneration()) return; // superseded by another switch
+            setLoading(false);
+            reloadFields();
+          });
+      }
     });
+    // Before the store changes, pending saves go to the store they were drawn for (never into the next one).
+    const offSwitch = onBeforeStoreSwitch(() => void flush());
 
     // ---------- settings ----------
     function buildSettings(): HTMLElement {
@@ -359,6 +414,7 @@ export const captureScreen: Screen = {
       void flush();
       slots.forEach((s) => s.field.destroy());
       offGlyphs();
+      offSwitch();
       ro.disconnect();
       window.removeEventListener('keydown', onKey);
       window.removeEventListener('pagehide', onHide);
