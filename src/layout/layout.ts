@@ -52,6 +52,11 @@ export interface LayoutOptions {
   seed?: number;
   /** Jitter amplitudes; partial objects are merged with the defaults. */
   jitter?: Partial<JitterOptions>;
+  /**
+   * Only count pages / lines and collect missing characters; pages come back without strokes. Much cheaper than a
+   * full layout (used for the page count of long texts while only the first pages are previewed).
+   */
+  measureOnly?: boolean;
 }
 
 export interface LayoutStats {
@@ -351,6 +356,13 @@ export function layoutText(text: string, glyphs: Glyph[], opts: LayoutOptions = 
     stats.textLines++;
     if (line.heading) stats.headings++;
 
+    if (opts.measureOnly) {
+      for (const { unit } of line.placed) {
+        if (unit.glyph) stats.glyphsPlaced++;
+        else stats.missingOccurrences++;
+      }
+      continue;
+    }
     const scale = line.heading ? headingScale : bodyScale;
     const unitPx = paper.pitch * scale; // canvas units per glyph unit
     const width = line.heading ? headingWidth : bodyWidth;

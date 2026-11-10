@@ -147,7 +147,12 @@ function newStrokeRecords(strokes: readonly PageStroke[], ctx: StrokeContext, zS
  * Strokes are appended after any records already present on the template page. Unchanged ZIP
  * entries are copied byte for byte.
  */
-export async function writeGoodnotes(template: Uint8Array, doc: DocumentContent): Promise<Uint8Array> {
+export async function writeGoodnotes(
+  template: Uint8Array,
+  doc: DocumentContent,
+  /** Called after each page is encoded (`done` of `total`), before the final ZIP is written. */
+  onProgress?: (done: number, total: number) => void,
+): Promise<Uint8Array> {
   const zip = readZip(template);
   const events = parseEvents(entryData(requireEntry(zip, EVENTS)));
   const pages = sortedPages(events);
@@ -180,6 +185,7 @@ export async function writeGoodnotes(template: Uint8Array, doc: DocumentContent)
   // page 1: template page
   const firstNew = newStrokeRecords(docPages[0].strokes, ctx, zAfter(existingDecoded));
   if (firstNew.length) replaced.set(tplNotesEntry.name, encodeNotesFile([...existing, ...firstNew]));
+  onProgress?.(1, docPages.length);
 
   // pages 2..N: clones
   const keys = orderKeysAfter(pageOrderKey(tplPage), docPages.length - 1);
@@ -201,6 +207,7 @@ export async function writeGoodnotes(template: Uint8Array, doc: DocumentContent)
       added.push(makeEntry(notesPath(notesId), encodeNotesFile(recs)));
       notesIndexAdds.push(pb.encode([pb.str(1, notesId), pb.str(2, notesPath(notesId))]));
     }
+    onProgress?.(i + 1, docPages.length);
   }
   if (newEvents.length) replaced.set(EVENTS, encodeEvents([...events, ...newEvents]));
   if (notesIndexAdds.length) {

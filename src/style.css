@@ -690,3 +690,17 @@ a.auth-status[data-signed-in='true']::before {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+
+/* ---------- Convert: file build progress ---------- */
+.build-progress {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.build-progress[hidden] {
+  display: none;
+}
+.build-progress p {
+  margin: 0;
+}
