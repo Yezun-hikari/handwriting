@@ -58,10 +58,10 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
       const limitMsg = h('p', { class: 'missing limit-msg' });
       const missingEl = h('p', { class: 'missing' });
       const preview = h('div', { class: 'preview', 'aria-label': 'Vorschau' });
-      const pageLabel = h('span', { class: 'muted' });
+      const pageLabel = h('span', { class: 'muted page-label' });
       const prev = button('←', () => showPage(page - 1), { 'aria-label': 'Vorherige Seite', class: 'btn icon' });
       const next = button('→', () => showPage(page + 1), { 'aria-label': 'Nächste Seite', class: 'btn icon' });
-      const download = button('Goodnotes-Datei herunterladen', () => void doDownload(), { class: 'btn primary big' });
+      const download = button('Goodnotes-Datei herunterladen', () => void doDownload(), { class: 'btn primary' });
       const buildFill = h('div', { class: 'progress-fill' });
       const buildBar = h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, 'aria-label': 'Fortschritt' }, buildFill);
       const buildText = h('p', { class: 'muted small', 'aria-live': 'polite' });
@@ -71,23 +71,30 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
         h(
           'section',
           { class: 'convert' },
-          h('h1', { tabindex: '-1', text: 'Text umwandeln' }),
-          h('p', { class: 'muted', text: 'Zeilen, die mit # beginnen, werden als Überschrift geschrieben.' }),
-          h('label', { for: 'text', class: 'label', text: 'Text' }),
-          text,
-          limitMsg,
-          h('div', { class: 'row' }, fileBtn, file, h('span', { class: 'muted small', text: `max. ${MAX_FILE_BYTES / 1024} KB, UTF-8` })),
+          h(
+            'header',
+            { class: 'page-head' },
+            h('h1', { tabindex: '-1', text: 'Text umwandeln' }),
+            h('p', { class: 'lede', text: 'Zeilen, die mit # beginnen, werden als Überschrift geschrieben.' }),
+          ),
           h(
             'div',
-            { class: 'options' },
-            h('label', { for: 'head-w' }, 'Stiftbreite Überschrift (mm)', headW),
-            h('label', { for: 'body-w' }, 'Stiftbreite Text (mm)', bodyW),
+            { class: 'convert-input' },
+            h('label', { for: 'text', class: 'eyebrow', text: 'Text' }),
+            text,
+            limitMsg,
+            h('div', { class: 'row file-row' }, fileBtn, file, h('span', { class: 'muted small', text: `max. ${MAX_FILE_BYTES / 1024} KB, UTF-8` })),
+            h(
+              'div',
+              { class: 'options' },
+              h('label', { for: 'head-w' }, h('span', { class: 'eyebrow' }, 'Stiftbreite Überschrift', h('span', { class: 'sr-only', text: ' (mm)' })), h('span', { class: 'unit-input' }, headW, h('span', { class: 'unit', 'aria-hidden': 'true', text: 'mm' }))),
+              h('label', { for: 'body-w' }, h('span', { class: 'eyebrow' }, 'Stiftbreite Text', h('span', { class: 'sr-only', text: ' (mm)' })), h('span', { class: 'unit-input' }, bodyW, h('span', { class: 'unit', 'aria-hidden': 'true', text: 'mm' }))),
+            ),
+            msg,
+            missingEl,
+            h('div', { class: 'download-row' }, download, buildBox),
           ),
-          msg,
-          missingEl,
-          h('div', { class: 'pager' }, prev, pageLabel, next),
-          preview,
-          h('div', { class: 'menu' }, download, buildBox),
+          h('div', { class: 'convert-preview' }, h('div', { class: 'pager' }, h('span', { class: 'eyebrow', text: 'Vorschau' }), h('span', { class: 'pager-nav' }, prev, pageLabel, next)), preview),
         ),
       );
 

@@ -8,7 +8,7 @@ import type { Screen } from './router.ts';
 export const homeScreen: Screen = {
   title: 'Start',
   mount(root) {
-    const status = h('p', { class: 'status-big', text: 'Lädt …' });
+    const status = h('p', { class: 'status-figure', text: 'Lädt …' });
     const statusSub = h('p', { class: 'muted' });
     const bar = h('div', { class: 'progress-fill' });
     const progress = h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': 0 }, bar);
@@ -19,35 +19,40 @@ export const homeScreen: Screen = {
         { class: 'home' },
         h(
           'div',
-          { class: 'hero' },
+          { class: 'home-intro' },
           h('h1', { tabindex: '-1', text: 'Deine Handschrift für Goodnotes' }),
           h('p', {
-            class: 'tagline',
+            class: 'lede',
             text:
               'Schreib jedes Zeichen ein paar Mal mit dem Apple Pencil. Danach verwandelt die App beliebigen Text in eine Goodnotes-Datei auf liniertem A4-Papier – in deiner eigenen Schrift, als echte Stiftstriche.',
           }),
+          h(
+            'p',
+            { class: 'actions' },
+            h('a', { class: 'btn primary', href: '#/schrift' }, 'Schrift erfassen'),
+            h('a', { class: 'btn', href: '#/umwandeln' }, 'Text umwandeln'),
+          ),
         ),
         h(
           'div',
-          { class: 'card' },
-          h('h2', { text: 'Stand deiner Schrift' }),
+          { class: 'home-status' },
+          h('h2', { class: 'eyebrow', text: 'Stand deiner Schrift' }),
           status,
           progress,
           statusSub,
           storageHintEl(),
         ),
         h(
-          'ol',
-          { class: 'steps' },
-          h('li', {}, h('strong', { text: 'Schrift erfassen: ' }), 'Buchstaben, Ziffern, Satzzeichen und Ligaturen je 3× auf die Hilfslinien schreiben.'),
-          h('li', {}, h('strong', { text: 'Text umwandeln: ' }), 'Text einfügen oder als .txt hochladen, Vorschau ansehen.'),
-          h('li', {}, h('strong', { text: 'Herunterladen: ' }), 'Die .goodnotes-Datei in Goodnotes öffnen oder importieren.'),
-        ),
-        h(
           'div',
-          { class: 'menu' },
-          h('a', { class: 'btn primary big', href: '#/schrift' }, 'Schrift erfassen'),
-          h('a', { class: 'btn big', href: '#/umwandeln' }, 'Text umwandeln'),
+          { class: 'home-steps' },
+          h('h2', { class: 'eyebrow', text: 'So geht es' }),
+          h(
+            'ol',
+            { class: 'steps' },
+            h('li', {}, h('strong', { text: 'Schrift erfassen.' }), ' Buchstaben, Ziffern, Satzzeichen und Ligaturen je dreimal auf die Hilfslinien schreiben.'),
+            h('li', {}, h('strong', { text: 'Text umwandeln.' }), ' Text einfügen oder als .txt hochladen, Vorschau ansehen.'),
+            h('li', {}, h('strong', { text: 'Herunterladen.' }), ' Die .goodnotes-Datei in Goodnotes öffnen oder importieren.'),
+          ),
         ),
       ),
     );
@@ -66,7 +71,7 @@ export const homeScreen: Screen = {
       const distinct = new Set(allGlyphs().map((g) => g.char)).size;
       statusSub.textContent =
         `Ligaturen: ${ligDone} von ${ligs.length * VARIANTS} · ${distinct} verschiedene Zeichen erfasst` +
-        (done === 0 ? ' – leg los!' : done < total ? '' : ' – vollständig!');
+        (done === 0 ? ' – leg los.' : done < total ? '' : ' – vollständig.');
     }
 
     const off = onGlyphsChange(update);

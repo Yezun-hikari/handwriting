@@ -66,8 +66,13 @@ export const captureScreen: Screen = {
     const undoBtn = button('Rückgängig', () => activeSlot()?.field.undo(), { 'aria-keyshortcuts': 'Meta+Z' });
     const clearBtn = button('Löschen', () => activeSlot()?.field.clear());
     const nextBtn = button('Weiter →', () => step(1), { class: 'btn primary', 'aria-keyshortcuts': 'ArrowRight' });
-    const nextEmptyBtn = button('Nächstes leeres Feld', () => jumpNextEmpty(), { class: 'btn ghost-btn' });
-    const toolbar = h('div', { class: 'toolbar' }, prevBtn, undoBtn, clearBtn, nextBtn);
+    const nextEmptyBtn = button('Nächstes leeres Feld', () => jumpNextEmpty());
+    const toolbar = h(
+      'div',
+      { class: 'toolbar' },
+      h('div', { class: 'tool-group' }, undoBtn, clearBtn),
+      h('div', { class: 'tool-group tool-nav' }, prevBtn, nextBtn),
+    );
 
     const overview = h('div', { class: 'overview' });
     const settingsEl = buildSettings();
@@ -124,7 +129,7 @@ export const captureScreen: Screen = {
       const isLig = [...char].length > 1;
       const units = isLig ? 3.6 : 2.6;
       const cols = getComputedStyle(fieldsEl).gridTemplateColumns.split(' ').filter(Boolean).length || 1;
-      const gap = 12;
+      const gap = parseFloat(getComputedStyle(fieldsEl).columnGap) || 0;
       const cellW = Math.floor((fieldsEl.clientWidth - gap * (cols - 1)) / cols) - 2; // minus border
       const pitch = pitchForWidth(cellW, units);
       slots = [];
@@ -251,7 +256,7 @@ export const captureScreen: Screen = {
           const t = h('button', { type: 'button', class: 'tile' });
           t.addEventListener('click', () => {
             showChar(c);
-            window.scrollTo({ top: 0, behavior: 'smooth' });
+            window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
           });
           tiles.set(c, t);
           fillTile(c);
