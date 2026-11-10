@@ -1,3 +1,6 @@
+import '@fontsource-variable/newsreader/opsz.css';
+import '@fontsource-variable/newsreader/opsz-italic.css';
+import '@fontsource-variable/source-sans-3/wght.css';
 import './style.css';
 import { startAccount } from './ui/auth-hook.ts';
 import { captureScreen } from './ui/capture-screen.ts';
