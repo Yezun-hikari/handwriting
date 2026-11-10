@@ -1,5 +1,6 @@
 import { DEFAULT_LIGATURES } from '../capture/charset.ts';
 import type { InputMode } from '../capture/input-policy.ts';
+import { DB_LIMITS, jsonBytes, validChar } from './validate.ts';
 
 /**
  * UI settings. The *roaming* part (ligature list, right gap, stroke widths) belongs to the handwriting and follows a
@@ -33,6 +34,20 @@ export const DEFAULT_SETTINGS: Settings = {
   bodyWidthMm: 0.35,
 };
 
+export const MAX_LIGATURES = 40;
+/** Stroke widths on the convert page, mm. */
+export const PEN_MIN_MM = 0.1;
+export const PEN_MAX_MM = 2;
+
+/** Clamps a pen width to {@link PEN_MIN_MM}..{@link PEN_MAX_MM}; non-numbers give `fallback`. */
+export function clampPenMm(v: unknown, fallback: number): number {
+  const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? Math.min(PEN_MAX_MM, Math.max(PEN_MIN_MM, n)) : fallback;
+}
+
+/** True if the roaming settings fit the account table (handwriting_settings: jsonb ≤ 16 KiB). */
+export const fitsAccountSettings = (s: RoamingSettings): boolean => jsonBytes(s) <= DB_LIMITS.settingsBytesMax;
+
 const inRange = (v: unknown, lo: number, hi: number): v is number =>
   typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
 const clamp = (v: unknown, lo: number, hi: number, d: number): number =>
@@ -40,14 +55,26 @@ const clamp = (v: unknown, lo: number, hi: number, d: number): number =>
 
 /** Valid roaming fields of untrusted data (server row, storage); invalid/missing fields are left out. */
 export function parseRoaming(v: unknown): Partial<RoamingSettings> {
-  const o = v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+  const o = v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
   const out: Partial<RoamingSettings> = {};
-  if (Array.isArray(o.ligatures) && o.ligatures.every((s) => typeof s === 'string' && s.length >= 1 && s.length <= 8))
-    out.ligatures = (o.ligatures as string[]).slice(0, 40);
+  if (jsonBytes(o) > DB_LIMITS.settingsBytesMax) return out; // larger than the account table accepts: not ours
+  if (Array.isArray(o.ligatures) && o.ligatures.length <= MAX_LIGATURES && o.ligatures.every(validChar))
+    out.ligatures = (o.ligatures as string[]).map((s) => s.normalize('NFC'));
   if (inRange(o.rightGap, 0, 0.6)) out.rightGap = o.rightGap;
-  if (inRange(o.headingWidthMm, 0.1, 2)) out.headingWidthMm = o.headingWidthMm;
-  if (inRange(o.bodyWidthMm, 0.1, 2)) out.bodyWidthMm = o.bodyWidthMm;
+  if (inRange(o.headingWidthMm, PEN_MIN_MM, PEN_MAX_MM)) out.headingWidthMm = o.headingWidthMm;
+  if (inRange(o.bodyWidthMm, PEN_MIN_MM, PEN_MAX_MM)) out.bodyWidthMm = o.bodyWidthMm;
   return out;
+}
+
+/** Roaming settings as the account may store them: pen widths clamped, ligatures within the table's limits. */
+export function sanitizeRoaming(s: RoamingSettings): RoamingSettings {
+  const d = DEFAULT_SETTINGS;
+  return {
+    ligatures: (Array.isArray(s.ligatures) ? s.ligatures : []).filter(validChar).slice(0, MAX_LIGATURES),
+    rightGap: clamp(s.rightGap, 0, 0.6, d.rightGap),
+    headingWidthMm: clampPenMm(s.headingWidthMm, d.headingWidthMm),
+    bodyWidthMm: clampPenMm(s.bodyWidthMm, d.bodyWidthMm),
+  };
 }
 
 export const roamingOf = (s: Settings): RoamingSettings => ({
@@ -81,12 +108,12 @@ export function loadSettings(): Settings {
   return {
     ligatures:
       Array.isArray(o.ligatures) && o.ligatures.every((s) => typeof s === 'string')
-        ? (o.ligatures as string[]).slice(0, 40)
+        ? (o.ligatures as string[]).slice(0, MAX_LIGATURES)
         : [...d.ligatures],
     rightGap: clamp(o.rightGap, 0, 0.6, d.rightGap),
     inputMode: o.inputMode === 'pen' || o.inputMode === 'any' || o.inputMode === 'auto' ? o.inputMode : d.inputMode,
-    headingWidthMm: clamp(o.headingWidthMm, 0.1, 2, d.headingWidthMm),
-    bodyWidthMm: clamp(o.bodyWidthMm, 0.1, 2, d.bodyWidthMm),
+    headingWidthMm: clamp(o.headingWidthMm, PEN_MIN_MM, PEN_MAX_MM, d.headingWidthMm),
+    bodyWidthMm: clamp(o.bodyWidthMm, PEN_MIN_MM, PEN_MAX_MM, d.bodyWidthMm),
   };
 }
 
@@ -102,6 +129,8 @@ export const sameRoaming = (a: RoamingSettings, b: RoamingSettings): boolean => 
 export function saveSettings(patch: Partial<Settings>): Settings {
   const prev = loadSettings();
   const next = { ...prev, ...patch };
+  next.headingWidthMm = clampPenMm(next.headingWidthMm, prev.headingWidthMm);
+  next.bodyWidthMm = clampPenMm(next.bodyWidthMm, prev.bodyWidthMm);
   write(next);
   if (roamingSink && !sameRoaming(roamingOf(prev), roamingOf(next))) roamingSink(roamingOf(next));
   return next;

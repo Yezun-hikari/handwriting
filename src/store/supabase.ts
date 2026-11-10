@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Glyph } from '../types.ts';
 import { toStoreError } from './errors.ts';
 import type { GlyphStore } from './types.ts';
-import { toGlyph } from './validate.ts';
+import { DB_LIMITS, toGlyph, validChar, validVariant } from './validate.ts';
 
 /**
  * Account-backed store on the shared yezun.de Supabase project (client from `@yezun/konto`'s getClient()).
@@ -22,17 +22,13 @@ export const UPLOAD_CHUNK = 40;
 
 /** Limits of the table's check constraints; glyphs outside them cannot be stored in the account. */
 export function fitsAccount(g: Glyph): boolean {
-  const len = [...g.char].length;
   return (
-    len >= 1 &&
-    len <= 8 &&
-    Number.isInteger(g.variant) &&
-    g.variant >= 0 &&
-    g.variant <= 9 &&
+    validChar(g.char) &&
+    validVariant(g.variant) &&
     Number.isFinite(g.advance) &&
-    g.advance >= 0 &&
-    g.advance <= 10 &&
-    JSON.stringify(g.strokes).length <= 60_000
+    g.advance >= DB_LIMITS.advanceMin &&
+    g.advance <= DB_LIMITS.advanceMax &&
+    JSON.stringify(g.strokes).length <= DB_LIMITS.strokesJsonMax
   );
 }
 

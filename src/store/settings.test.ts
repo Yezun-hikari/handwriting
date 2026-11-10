@@ -1,5 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyRoaming, loadSettings, parseRoaming, saveSettings, setRoamingSink, SETTINGS_KEY } from './settings.ts';
+import {
+  applyRoaming,
+  clampPenMm,
+  fitsAccountSettings,
+  loadSettings,
+  parseRoaming,
+  sanitizeRoaming,
+  saveSettings,
+  setRoamingSink,
+  SETTINGS_KEY,
+} from './settings.ts';
+import { FakeDb } from './__fakes__/fake-db.ts';
+import { SETTINGS_TABLE, SupabaseSettingsStore } from './supabase-settings.ts';
 
 beforeEach(() => {
   const m = new Map<string, string>();
@@ -30,5 +42,37 @@ describe('settings split', () => {
   it('parseRoaming drops invalid fields', () => {
     expect(parseRoaming({ rightGap: 5, ligatures: [1], bodyWidthMm: 0.4, inputMode: 'pen' })).toEqual({ bodyWidthMm: 0.4 });
     expect(parseRoaming(null)).toEqual({});
+  });
+  it('parseRoaming rejects oversized objects and over-long ligatures (code points)', () => {
+    expect(parseRoaming({ rightGap: 0.2, junk: 'x'.repeat(20_000) })).toEqual({});
+    expect(parseRoaming({ ligatures: ['abcdefghi'] })).toEqual({});
+    expect(parseRoaming({ ligatures: ['😀😀'] })).toEqual({ ligatures: ['😀😀'] });
+  });
+});
+
+describe('pen widths', () => {
+  it('clampPenMm keeps 0.1..2 mm', () => {
+    expect(clampPenMm(5, 0.35)).toBe(2);
+    expect(clampPenMm(0.01, 0.35)).toBe(0.1);
+    expect(clampPenMm('0.5', 0.35)).toBe(0.5);
+    expect(clampPenMm('', 0.35)).toBe(0.35);
+    expect(clampPenMm(NaN, 0.35)).toBe(0.35);
+    expect(clampPenMm(-1, 0.35)).toBe(0.35);
+  });
+  it('saveSettings clamps before storing and before the roaming sink', () => {
+    const sink = vi.fn();
+    setRoamingSink(sink);
+    const s = saveSettings({ headingWidthMm: 9, bodyWidthMm: 0 });
+    expect(s.headingWidthMm).toBe(2);
+    expect(s.bodyWidthMm).toBe(0.35); // invalid → previous value
+    expect(loadSettings().headingWidthMm).toBe(2);
+    expect(sink).toHaveBeenCalledWith(expect.objectContaining({ headingWidthMm: 2 }));
+  });
+  it('the account store saves sanitized settings that fit the table', async () => {
+    const db = new FakeDb();
+    const st = new SupabaseSettingsStore(db.client(), 'u1');
+    await st.save({ ligatures: ['sch', 'abcdefghi'], rightGap: 0.1, headingWidthMm: 7, bodyWidthMm: 0.05 });
+    expect(db.rows(SETTINGS_TABLE)[0].settings).toEqual({ ligatures: ['sch'], rightGap: 0.1, headingWidthMm: 2, bodyWidthMm: 0.1 });
+    expect(fitsAccountSettings(sanitizeRoaming({ ligatures: [], rightGap: 0, headingWidthMm: 1, bodyWidthMm: 1 }))).toBe(true);
   });
 });

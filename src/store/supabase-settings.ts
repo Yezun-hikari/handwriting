@@ -1,5 +1,5 @@
-import { toStoreError } from './errors.ts';
-import { parseRoaming, type RoamingSettings } from './settings.ts';
+import { StoreError, toStoreError } from './errors.ts';
+import { fitsAccountSettings, parseRoaming, sanitizeRoaming, type RoamingSettings } from './settings.ts';
 import type { DbClient } from './supabase.ts';
 
 export const SETTINGS_TABLE = 'handwriting_settings';
@@ -30,9 +30,11 @@ export class SupabaseSettingsStore implements RemoteSettingsStore {
   }
 
   async save(s: RoamingSettings): Promise<void> {
+    const settings = sanitizeRoaming(s);
+    if (!fitsAccountSettings(settings)) throw new StoreError('quota', 'settings larger than 16 KiB');
     const { error, status } = await this.client
       .from(this.table)
-      .upsert({ user_id: this.userId, settings: s }, { onConflict: 'user_id' });
+      .upsert({ user_id: this.userId, settings }, { onConflict: 'user_id' });
     if (error) throw toStoreError(error, status);
   }
 }
