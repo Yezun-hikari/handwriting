@@ -31,6 +31,11 @@ export function replaceParams(params: Record<string, string>): void {
 
 export const currentRoute = (): string => currentId;
 
+/** Re-mount the current screen (e.g. after settings arrived from the account). */
+export function refreshScreen(): void {
+  render();
+}
+
 function render(): void {
   if (!outlet) return;
   const [path, query = ''] = location.hash.replace(/^#\/?/, '').split('?');

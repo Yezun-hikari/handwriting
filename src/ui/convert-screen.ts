@@ -1,4 +1,4 @@
-import { allGlyphs, ensureLoaded } from '../store/index.ts';
+import { allGlyphs, describeStoreError, ensureLoaded } from '../store/index.ts';
 import { loadSettings, saveSettings } from '../store/settings.ts';
 import type { DocumentContent } from '../types.ts';
 import { convertDeps, type ConvertDeps } from './convert-deps.ts';
@@ -192,7 +192,7 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
         });
 
       ensureLoaded()
-        .catch(() => setMsg('Gespeicherte Schrift konnte nicht geladen werden.', true))
+        .catch((e: unknown) => setMsg(`Gespeicherte Schrift konnte nicht geladen werden. ${describeStoreError(e)}`, true))
         .finally(() => root.isConnected && run());
 
       return () => {

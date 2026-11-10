@@ -608,3 +608,82 @@ textarea {
   opacity: 1;
   transform: translate(-50%, 0);
 }
+
+/* ---------- Account ---------- */
+a.auth-status {
+  text-decoration: none;
+  white-space: nowrap;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+a.auth-status[href] {
+  color: var(--text);
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+}
+a.auth-status[href]:hover {
+  border-color: var(--accent);
+}
+a.auth-status[data-signed-in='true']::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ok);
+  margin-right: 6px;
+  flex: none;
+}
+.storage-hint a {
+  color: var(--accent);
+  font-weight: 600;
+}
+.account-notice {
+  max-width: 66rem;
+  margin: 8px auto 0;
+  padding: 10px var(--gutter);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border));
+  border-radius: 12px;
+}
+.account-notice ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+.account-notice .small-btn {
+  min-height: 36px;
+  padding: 4px 12px;
+}
+.merge-dialog {
+  max-width: min(34rem, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+.merge-dialog::backdrop {
+  background: rgb(10 12 20 / 0.45);
+}
+.merge-dialog h2 {
+  margin-top: 0;
+}
+.merge-facts {
+  padding-left: 1.2rem;
+}
+.merge-dialog .check {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 8px 0;
+}
+.merge-dialog .toolbar {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

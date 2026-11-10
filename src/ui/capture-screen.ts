@@ -4,9 +4,9 @@ import { pitchForWidth } from '../capture/geometry.ts';
 import type { InputMode } from '../capture/input-policy.ts';
 import { buildGlyph } from '../capture/normalize.ts';
 import { PointerGate } from '../capture/pointer-gate.ts';
-import { countCaptured, ensureLoaded, getGlyph, onGlyphsChange, removeGlyph, saveGlyph } from '../store/index.ts';
+import { countCaptured, describeStoreError, ensureLoaded, getGlyph, onGlyphsChange, removeGlyph, saveGlyph } from '../store/index.ts';
 import { loadSettings, saveSettings, type Settings } from '../store/settings.ts';
-import { storageHint } from './auth-hook.ts';
+import { storageHintEl } from './auth-hook.ts';
 import { button, h, toast } from './dom.ts';
 import { glyphSvg } from './glyph-svg.ts';
 import { replaceParams, type Screen } from './router.ts';
@@ -67,7 +67,7 @@ export const captureScreen: Screen = {
         h('div', { class: 'cap-head' }, bigChar, h('div', { class: 'cap-head-text' }, title, progressText, progress)),
         fieldsEl,
         toolbar,
-        h('div', { class: 'toolbar secondary' }, nextEmptyBtn, h('p', { class: 'muted small', text: storageHint() })),
+        h('div', { class: 'toolbar secondary' }, nextEmptyBtn, storageHintEl()),
         settingsEl,
         h('h2', { class: 'section-title', text: 'Übersicht' }),
         overview,
@@ -91,9 +91,7 @@ export const captureScreen: Screen = {
         () => setStatus(slot, g ? 'saved' : 'empty'),
         (err: unknown) => {
           setStatus(slot, 'error');
-          toast(err instanceof DOMException && err.name === 'QuotaExceededError'
-            ? 'Browserspeicher voll – Schrift kann nicht gespeichert werden.'
-            : 'Speichern fehlgeschlagen.');
+          toast(`Speichern fehlgeschlagen. ${describeStoreError(err)}`);
         },
       );
     }
@@ -348,7 +346,7 @@ export const captureScreen: Screen = {
     bigChar.textContent = char;
     title.textContent = describeChar(char);
     ensureLoaded()
-      .catch(() => toast('Gespeicherte Schrift konnte nicht geladen werden.'))
+      .catch((e: unknown) => toast(`Gespeicherte Schrift konnte nicht geladen werden. ${describeStoreError(e)}`))
       .finally(() => {
         if (!root.isConnected) return;
         buildFields();

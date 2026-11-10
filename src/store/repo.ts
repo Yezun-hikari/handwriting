@@ -18,24 +18,53 @@ function activeStore(): GlyphStore {
   return (store ??= new LocalGlyphStore());
 }
 
+let gate: Promise<void> = Promise.resolve();
+let openGate: (() => void) | null = null;
+
+/**
+ * Delays loading until the store is chosen (the account check at startup is async), so screens never show this
+ * browser's glyphs first and then jump to the account's. Released by the next setGlyphStore() or after `maxMs`.
+ */
+export function holdGlyphStore(maxMs = 5000): void {
+  if (openGate) return;
+  gate = new Promise<void>((resolve) => {
+    const t = setTimeout(release, maxMs);
+    function release(): void {
+      clearTimeout(t);
+      openGate = null;
+      resolve();
+    }
+    openGate = release;
+  });
+}
+
 export function setGlyphStore(s: GlyphStore): Promise<void> {
   store = s;
   cache = new Map();
   loaded = null;
+  openGate?.();
+  emit();
   return ensureLoaded();
 }
 
 export function ensureLoaded(): Promise<void> {
-  return (loaded ??= activeStore()
-    .load()
-    .then((gs) => {
-      cache = new Map(gs.map((g) => [glyphKey(g.char, g.variant), g]));
-      emit();
+  if (loaded) return loaded;
+  const p: Promise<void> = gate
+    .then(() => {
+      if (loaded !== p) return ensureLoaded(); // superseded by setGlyphStore() while waiting: follow the new load
+      const st = activeStore();
+      return st.load().then((gs) => {
+        if (st !== store) return; // store switched meanwhile: ignore stale data
+        cache = new Map(gs.map((g) => [glyphKey(g.char, g.variant), g]));
+        emit();
+      });
     })
-    .catch((e) => {
-      loaded = null;
+    .catch((e: unknown) => {
+      if (loaded === p) loaded = null;
       throw e;
-    }));
+    });
+  loaded = p;
+  return p;
 }
 
 export const allGlyphs = (): Glyph[] => [...cache.values()];

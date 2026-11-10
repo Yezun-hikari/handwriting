@@ -1,7 +1,7 @@
 import { BASE_GROUPS, VARIANTS } from '../capture/charset.ts';
-import { allGlyphs, countCaptured, ensureLoaded, onGlyphsChange } from '../store/index.ts';
+import { allGlyphs, countCaptured, describeStoreError, ensureLoaded, onGlyphsChange } from '../store/index.ts';
 import { loadSettings } from '../store/settings.ts';
-import { getAuthState, storageHint } from './auth-hook.ts';
+import { storageHintEl } from './auth-hook.ts';
 import { h } from './dom.ts';
 import type { Screen } from './router.ts';
 
@@ -34,7 +34,7 @@ export const homeScreen: Screen = {
           status,
           progress,
           statusSub,
-          h('p', { class: 'muted small', text: `${storageHint()} (${getAuthState().label})` }),
+          storageHintEl(),
         ),
         h(
           'ol',
@@ -72,7 +72,10 @@ export const homeScreen: Screen = {
     const off = onGlyphsChange(update);
     ensureLoaded()
       .then(update)
-      .catch(() => (status.textContent = 'Konnte nicht geladen werden'));
+      .catch((e: unknown) => {
+        status.textContent = 'Konnte nicht geladen werden';
+        statusSub.textContent = describeStoreError(e);
+      });
     return off;
   },
 };

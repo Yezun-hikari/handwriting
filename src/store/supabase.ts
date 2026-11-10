@@ -1,64 +1,60 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Glyph } from '../types.ts';
+import { toStoreError } from './errors.ts';
 import type { GlyphStore } from './types.ts';
 import { toGlyph } from './validate.ts';
 
-/*
- * Supabase-backed store. No supabase dependency here: pass the shared client (supabase-js v2)
- * from the yezun.de auth module; it satisfies `SupabaseClientLike` structurally (cast if the
- * generics get in the way: `client as unknown as SupabaseClientLike`).
- *
- * Expected table (SQL for the integration migration):
- *
- *   create table public.handwriting_glyphs (
- *     user_id uuid not null references auth.users(id) on delete cascade default auth.uid(),
- *     char text not null check (char_length(char) between 1 and 16),
- *     variant smallint not null check (variant between 0 and 99),
- *     strokes jsonb not null,
- *     advance real not null,
- *     updated_at timestamptz not null default now(),
- *     primary key (user_id, char, variant)
- *   );
- *   alter table public.handwriting_glyphs enable row level security;
- *   create policy "own glyphs" on public.handwriting_glyphs for all
- *     using (auth.uid() = user_id) with check (auth.uid() = user_id);
+/**
+ * Account-backed store on the shared yezun.de Supabase project (client from `@yezun/konto`'s getClient()).
+ * Table `handwriting_glyphs` (migration in the konto repo, supabase/migrations/*_handwriting.sql):
+ *   pk (user_id, char, variant), char 1..8 code points, variant 0..9, strokes jsonb (≤ 64 KiB), advance real 0..10,
+ *   updated_at set by a trigger. RLS: own rows only, registered (non-anonymous) users only.
+ * Only the `from` method of the client is used, so tests can pass a small fake.
  */
-
-export interface PgError {
-  message: string;
-}
-export interface PgResult<T> {
-  data: T | null;
-  error: PgError | null;
-}
-export interface FilterLike<T> extends PromiseLike<PgResult<T>> {
-  eq(column: string, value: unknown): FilterLike<T>;
-}
-export interface TableLike {
-  select(columns: string): FilterLike<unknown[]>;
-  upsert(row: Record<string, unknown>, options?: { onConflict?: string }): PromiseLike<PgResult<unknown>>;
-  delete(): FilterLike<unknown>;
-}
-export interface SupabaseClientLike {
-  from(table: string): TableLike;
-}
+export type DbClient = Pick<SupabaseClient, 'from'>;
+/** @deprecated old name; the real supabase-js client is accepted directly now. */
+export type SupabaseClientLike = DbClient;
 
 export const GLYPH_TABLE = 'handwriting_glyphs';
+const CONFLICT = 'user_id,char,variant';
+/** Rows per upsert request when uploading many glyphs (keeps request bodies well below 1 MB). */
+export const UPLOAD_CHUNK = 40;
+
+/** Limits of the table's check constraints; glyphs outside them cannot be stored in the account. */
+export function fitsAccount(g: Glyph): boolean {
+  const len = [...g.char].length;
+  return (
+    len >= 1 &&
+    len <= 8 &&
+    Number.isInteger(g.variant) &&
+    g.variant >= 0 &&
+    g.variant <= 9 &&
+    Number.isFinite(g.advance) &&
+    g.advance >= 0 &&
+    g.advance <= 10 &&
+    JSON.stringify(g.strokes).length <= 60_000
+  );
+}
 
 export class SupabaseGlyphStore implements GlyphStore {
   constructor(
-    private readonly client: SupabaseClientLike,
-    private readonly userId: string,
+    private readonly client: DbClient,
+    readonly userId: string,
     private readonly table = GLYPH_TABLE,
   ) {}
 
+  private row(g: Glyph) {
+    return { user_id: this.userId, char: g.char.normalize('NFC'), variant: g.variant, strokes: g.strokes, advance: g.advance };
+  }
+
   async load(): Promise<Glyph[]> {
-    const { data, error } = await this.client
+    const { data, error, status } = await this.client
       .from(this.table)
       .select('char,variant,strokes,advance')
       .eq('user_id', this.userId);
-    if (error) throw new Error(error.message);
+    if (error) throw toStoreError(error, status);
     const out: Glyph[] = [];
-    for (const row of data ?? []) {
+    for (const row of (data ?? []) as unknown[]) {
       const g = toGlyph(row);
       if (g) out.push(g);
     }
@@ -66,27 +62,27 @@ export class SupabaseGlyphStore implements GlyphStore {
   }
 
   async save(g: Glyph): Promise<void> {
-    const { error } = await this.client.from(this.table).upsert(
-      {
-        user_id: this.userId,
-        char: g.char.normalize('NFC'),
-        variant: g.variant,
-        strokes: g.strokes,
-        advance: g.advance,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,char,variant' },
-    );
-    if (error) throw new Error(error.message);
+    const { error, status } = await this.client.from(this.table).upsert(this.row(g), { onConflict: CONFLICT });
+    if (error) throw toStoreError(error, status);
+  }
+
+  /** Upserts many glyphs in chunks; `onProgress(done)` after each chunk. Stops at the first failing chunk. */
+  async saveMany(glyphs: readonly Glyph[], onProgress?: (done: number) => void): Promise<void> {
+    for (let i = 0; i < glyphs.length; i += UPLOAD_CHUNK) {
+      const chunk = glyphs.slice(i, i + UPLOAD_CHUNK).map((g) => this.row(g));
+      const { error, status } = await this.client.from(this.table).upsert(chunk, { onConflict: CONFLICT });
+      if (error) throw toStoreError(error, status);
+      onProgress?.(Math.min(glyphs.length, i + chunk.length));
+    }
   }
 
   async remove(char: string, variant: number): Promise<void> {
-    const { error } = await this.client
+    const { error, status } = await this.client
       .from(this.table)
       .delete()
       .eq('user_id', this.userId)
       .eq('char', char.normalize('NFC'))
       .eq('variant', variant);
-    if (error) throw new Error(error.message);
+    if (error) throw toStoreError(error, status);
   }
 }
