@@ -2,16 +2,16 @@ import type { Glyph, Point, Stroke } from '../types.ts';
 
 /**
  * Limits of the account tables' check constraints (konto repo, supabase/migrations/*_handwriting.sql):
- * `char_length(char) between 1 and 8` (Postgres counts characters = Unicode code points, not UTF-16 units),
- * `variant between 0 and 9`, `advance between 0 and 10`, `pg_column_size(strokes) <= 65536`,
+ * `char_length(char) between 1 and 4` (Postgres counts characters = Unicode code points, not UTF-16 units),
+ * `variant between 0 and 2` (tightened by migration 20261110…_handwriting_quota, plus a 500-row quota per user), `advance between 0 and 10`, `pg_column_size(strokes) <= 65536`,
  * settings jsonb `pg_column_size(settings) <= 16384`. Local data is validated with the same char/variant limits so
  * nothing exists in this browser that could never move into an account.
  */
 export const DB_LIMITS = {
   charMin: 1,
-  charMax: 8,
+  charMax: 4,
   variantMin: 0,
-  variantMax: 9,
+  variantMax: 2,
   advanceMin: 0,
   advanceMax: 10,
   /** JSON text length of strokes; below 64 KiB to leave room for jsonb overhead. */

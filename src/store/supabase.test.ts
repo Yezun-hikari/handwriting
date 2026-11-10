@@ -56,9 +56,9 @@ describe('error texts', () => {
 
 describe('fitsAccount', () => {
   it('follows the table constraints', () => {
-    expect(fitsAccount(g('sch', 9))).toBe(true);
-    expect(fitsAccount(g('a', 10))).toBe(false);
-    expect(fitsAccount(g('abcdefghi', 0))).toBe(false);
+    expect(fitsAccount(g('sch', 2))).toBe(true);
+    expect(fitsAccount(g('a', 3))).toBe(false);
+    expect(fitsAccount(g('abcde', 0))).toBe(false);
     expect(fitsAccount(g('a', 0, 11))).toBe(false);
   });
 });
