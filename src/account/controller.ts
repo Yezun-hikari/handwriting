@@ -6,6 +6,7 @@
  * - After a registered sign-in with local glyphs: offer to upload them (never overwriting account glyphs silently).
  */
 import type { AuthUser } from '@yezun/konto';
+import { accountCacheKey, CachedGlyphStore, type AccountGlyphStore } from '../store/cached.ts';
 import { describeStoreError } from '../store/errors.ts';
 import { glyphsToUpload, localFingerprint, needsDecision, planMerge, type MergePlan } from '../store/merge.ts';
 import type { RoamingSettings } from '../store/settings.ts';
@@ -13,7 +14,6 @@ import { SupabaseSettingsStore, type RemoteSettingsStore } from '../store/supaba
 import { SupabaseGlyphStore, type DbClient } from '../store/supabase.ts';
 import type { GlyphStore } from '../store/types.ts';
 import type { KeyValueStorage } from '../store/local.ts';
-import type { Glyph } from '../types.ts';
 
 export type AccountStatus = 'unconfigured' | 'signedOut' | 'guest' | 'registered';
 
@@ -62,9 +62,7 @@ export function storageHintText(s: AccountState): string {
 /** Answer of the upload dialog. `later` asks again next time; `skip` remembers the decision for this local set. */
 export type MergeDecision = 'upload' | 'overwrite' | 'skip' | 'later';
 
-export interface UploadStore extends GlyphStore {
-  saveMany(glyphs: readonly Glyph[], onProgress?: (done: number) => void): Promise<void>;
-}
+export type UploadStore = AccountGlyphStore;
 
 export interface AccountDeps {
   configured: boolean;
@@ -150,6 +148,9 @@ export class AccountController {
   apply(user: AuthUser | null): void {
     const next = stateFor(user, this.d.configured);
     if (sameState(this.state, next)) return;
+    const prev = this.state;
+    // Signed out (or another user): this browser no longer keeps the offline copy of that account's glyphs.
+    if (prev?.status === 'registered' && prev.userId !== next.userId) this.forgetCache(prev.userId!);
     this.state = next;
     const gen = ++this.gen;
     this.d.onState(next);
@@ -166,9 +167,18 @@ export class AccountController {
     await this.d.setGlyphStore(this.d.localStore);
   }
 
+  private forgetCache(userId: string): void {
+    try {
+      this.d.memory.setItem(accountCacheKey(userId), '');
+    } catch {
+      /* ignore */
+    }
+  }
+
   private async enterAccount(userId: string, gen: number): Promise<void> {
     const client = this.d.getClient();
-    const glyphs = (this.d.remoteGlyphs ?? ((c, id) => new SupabaseGlyphStore(c, id)))(client, userId);
+    const remote = (this.d.remoteGlyphs ?? ((c, id) => new SupabaseGlyphStore(c, id)))(client, userId);
+    const glyphs = new CachedGlyphStore(remote, this.d.memory, userId);
     const settings = (this.d.remoteSettings ?? ((c, id) => new SupabaseSettingsStore(c, id)))(client, userId);
 
     let loaded = true;
@@ -179,9 +189,12 @@ export class AccountController {
       this.d.notify(`Schrift aus dem Konto konnte nicht geladen werden. ${describeStoreError(e)}`, 'error');
     }
     if (this.stale(gen)) return;
+    if (glyphs.fromCache) {
+      this.d.notify('Offline: Deine Schrift aus dem Konto wird aus der Kopie in diesem Browser geladen. Änderungen lassen sich erst wieder mit Internet speichern.', 'info');
+    }
 
-    await this.syncSettings(settings, userId, gen);
-    if (this.stale(gen) || !loaded) return;
+    await this.syncSettings(settings, userId, gen, glyphs.fromCache);
+    if (this.stale(gen) || !loaded || glyphs.fromCache) return;
     await this.offerUpload(userId, glyphs, gen);
   }
 
@@ -206,8 +219,9 @@ export class AccountController {
     }
   }
 
-  private async syncSettings(store: RemoteSettingsStore, userId: string, gen: number): Promise<void> {
-    try {
+  private async syncSettings(store: RemoteSettingsStore, userId: string, gen: number, offline = false): Promise<void> {
+    // Offline the local working copy stays as it is; changes are still marked dirty and pushed on the next online load.
+    if (!offline) try {
       const remote = await store.load();
       if (this.stale(gen)) return;
       if (remote && Object.keys(remote).length && !this.isDirty(userId)) {
