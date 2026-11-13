@@ -18,18 +18,11 @@ export function registerScreen(id: string, screen: Screen): void {
   if (outlet && id === currentId) render();
 }
 
-export function navigate(id: string, params?: Record<string, string>): void {
-  const q = params ? '?' + new URLSearchParams(params) : '';
-  location.hash = `#/${id}${q}`;
-}
-
 /** Update the query of the current route without re-rendering. */
 export function replaceParams(params: Record<string, string>): void {
   const url = `#/${currentId}?${new URLSearchParams(params)}`;
   history.replaceState(history.state, '', url);
 }
-
-export const currentRoute = (): string => currentId;
 
 /** Re-mount the current screen (e.g. after settings arrived from the account). */
 export function refreshScreen(): void {

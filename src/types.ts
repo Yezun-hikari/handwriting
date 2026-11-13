@@ -32,11 +32,6 @@ export interface Glyph {
   advance: number;
 }
 
-/** All glyphs of a user, plus settings. */
-export interface HandwritingSet {
-  glyphs: Glyph[];
-}
-
 /** RGBA, each 0..1. */
 export interface Rgba {
   r: number;

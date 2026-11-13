@@ -6,7 +6,7 @@ import type { MergePlan } from '../store/merge.ts';
 import type { RoamingSettings } from '../store/settings.ts';
 import { SupabaseGlyphStore } from '../store/supabase.ts';
 import type { GlyphStore } from '../store/types.ts';
-import { AccountController, chipLabel, mergeMemoryKey, stateFor, storageHintText, type AccountDeps, type MergeDecision } from './controller.ts';
+import { AccountController, chipLabel, mergeMemoryKey, settingsDirtyKey, stateFor, storageHintText, type AccountDeps, type MergeDecision } from './controller.ts';
 
 class Mem {
   m = new Map<string, string>();
@@ -138,6 +138,22 @@ describe('settings roaming', () => {
     t.sink()!({ ...t.roaming(), bodyWidthMm: 0.5 });
     await new Promise((r) => setTimeout(r, 5));
     expect((t.db.rows('handwriting_settings')[0].settings as RoamingSettings).bodyWidthMm).toBe(0.5);
+  });
+  it('a local change that never reached the account is pushed on the next load, not overwritten', async () => {
+    const t = setup({ user: REG });
+    t.db.rows('handwriting_settings').push({ user_id: 'u1', settings: { rightGap: 0.3 } });
+    await t.c.start();
+    t.sink()!({ ...t.roaming(), bodyWidthMm: 0.5 }); // tab closes before the debounced push runs
+    expect(t.memory.getItem(settingsDirtyKey('u1'))).toBe('1');
+    t.c.stop();
+
+    const next = setup({ user: REG });
+    next.memory.m = t.memory.m;
+    next.db.rows('handwriting_settings').push({ user_id: 'u1', settings: { rightGap: 0.3 } });
+    await next.c.start();
+    expect(next.deps.onSettingsApplied).not.toHaveBeenCalled();
+    expect(next.db.rows('handwriting_settings').at(-1)!.settings).toEqual(DEFAULT_ROAMING);
+    expect(next.memory.getItem(settingsDirtyKey('u1'))).toBe('');
   });
   it('first sign-in uploads this device’s settings', async () => {
     const t = setup({ user: REG });
