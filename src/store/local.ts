@@ -54,6 +54,11 @@ export class LocalGlyphStore implements GlyphStore {
     this.write(map);
   }
 
+  /** Replaces the whole set (used for the offline copy of an account). */
+  async replaceAll(glyphs: readonly Glyph[]): Promise<void> {
+    this.write(new Map(glyphs.map((g) => [glyphKey(g.char, g.variant), g])));
+  }
+
   async remove(char: string, variant: number): Promise<void> {
     const map = this.read();
     if (map.delete(glyphKey(char, variant))) this.write(map);

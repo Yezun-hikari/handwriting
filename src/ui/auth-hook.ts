@@ -142,10 +142,30 @@ function toUser(session: { user?: { id: string; is_anonymous?: boolean; email?: 
   return { id: u.id, isGuest, username: isGuest ? null : (u.email ?? '').split('@')[0] };
 }
 
+/** The SDK's stored session (supabase-js format), for when it cannot be refreshed offline. */
+const SESSION_KEY = 'yezun-games-auth';
+
+function storedSessionUser(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? toUser(JSON.parse(raw) as Parameters<typeof toUser>[0]) : null;
+  } catch {
+    return null;
+  }
+}
+
 async function readUser(): Promise<AuthUser | null> {
   await ready;
-  const { data } = await getClient().auth.getSession();
-  return toUser(data.session) ?? (data.session ? currentUser() : null);
+  let session: Parameters<typeof toUser>[0] = null;
+  try {
+    session = (await getClient().auth.getSession()).data.session;
+  } catch {
+    /* offline refresh failure: handled below */
+  }
+  const user = toUser(session) ?? (session ? currentUser() : null);
+  // Offline an expired access token cannot be refreshed, so getSession() reports none although the session is still
+  // stored (supabase-js keeps it on network errors). Stay signed in to that account to show its offline copy.
+  return user ?? (navigator.onLine === false ? storedSessionUser() : null);
 }
 
 /** Starts the account integration. Without VITE_SUPABASE_* the app runs in local-only mode. */

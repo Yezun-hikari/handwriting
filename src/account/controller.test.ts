@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthUser } from '@yezun/konto';
+import { accountCacheKey, CachedGlyphStore } from '../store/cached.ts';
 import { LocalGlyphStore } from '../store/local.ts';
 import { FakeDb } from '../store/__fakes__/fake-db.ts';
 import type { MergePlan } from '../store/merge.ts';
 import type { RoamingSettings } from '../store/settings.ts';
-import { SupabaseGlyphStore } from '../store/supabase.ts';
 import type { GlyphStore } from '../store/types.ts';
 import { AccountController, chipLabel, mergeMemoryKey, settingsDirtyKey, stateFor, storageHintText, type AccountDeps, type MergeDecision } from './controller.ts';
 
@@ -102,8 +102,8 @@ describe('store selection', () => {
   it('registered → Supabase store for that user; sign-out → back to local', async () => {
     const t = setup({ user: REG });
     await t.c.start();
-    expect(t.stores[0]).toBeInstanceOf(SupabaseGlyphStore);
-    expect((t.stores[0] as SupabaseGlyphStore).userId).toBe('u1');
+    expect(t.stores[0]).toBeInstanceOf(CachedGlyphStore);
+    expect((t.stores[0] as CachedGlyphStore).userId).toBe('u1');
     await t.login(null);
     expect(t.stores.at(-1)).toBe(t.local);
     expect(t.sink()).toBeNull();
@@ -116,7 +116,27 @@ describe('store selection', () => {
     t.setUser(REG);
     await t.c.refresh();
     expect(t.states).toEqual(['signedOut', 'registered']);
-    expect(t.stores.at(-1)).toBeInstanceOf(SupabaseGlyphStore);
+    expect(t.stores.at(-1)).toBeInstanceOf(CachedGlyphStore);
+  });
+  it('offline after an earlier online visit → account glyphs from the browser copy, no error, no merge offer', async () => {
+    const t = setup({ user: REG, local: [g('x', 0)] });
+    t.db.rows('handwriting_glyphs').push({ user_id: 'u1', ...g('a', 0) });
+    await t.c.start();
+    await t.login(null); // copy is dropped on sign-out …
+    expect(t.memory.getItem(accountCacheKey('u1'))).toBe('');
+    await t.login(REG); // … and written again on the next online sign-in
+    const asked = t.asked.length;
+
+    const off = setup({ user: REG, local: [g('x', 0)] });
+    off.memory.m = t.memory.m;
+    off.db.failWith = { error: { message: 'Failed to fetch' }, status: 0 };
+    await off.c.start();
+    // 'a' from the account, 'x' uploaded from this browser at the earlier sign-in
+    expect((await off.stores.at(-1)!.load()).map((x) => x.char).sort()).toEqual(['a', 'x']);
+    expect(off.notes.filter(([k]) => k === 'error')).toEqual([]);
+    expect(off.notes[0]).toEqual(['info', expect.stringMatching(/^Offline:/)]);
+    expect(off.asked).toHaveLength(0);
+    expect(asked).toBeGreaterThan(0);
   });
   it('load error in the account → German notice, no merge offer', async () => {
     const t = setup({ user: REG, local: [g('a', 0)] });
@@ -182,7 +202,7 @@ describe('upload of local glyphs after sign-in', () => {
     expect(remoteRows(t)).toHaveLength(3);
     expect(remoteRows(t).find((r) => r.char === 'a')!.strokes).toEqual(g('a', 0).strokes); // not overwritten
     expect(t.notes).toContainEqual(['info', '2 Zeichen ins Konto übernommen.']);
-    expect(t.stores.at(-1)).toBeInstanceOf(SupabaseGlyphStore); // cache reloaded
+    expect(t.stores.at(-1)).toBeInstanceOf(CachedGlyphStore); // cache reloaded
     expect(t.memory.getItem(mergeMemoryKey('u1'))).toBeTruthy();
     // next sign-in with the same local set: no question again
     await t.login(null);

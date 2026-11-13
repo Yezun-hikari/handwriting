@@ -44,6 +44,11 @@ SDK `@yezun/konto`). Die App hat kein eigenes Login-Formular: Der Chip oben rech
   Konto.
 - Fehler (offline, abgelaufene Sitzung, fehlende Berechtigung) erscheinen als deutsche Meldung oben auf der Seite.
 - An- und Abmelden auf der Konto-Seite oder in einem anderen Tab wird beim Zurückkehren erkannt.
+- **Offline:** Jedes erfolgreiche Laden/Speichern legt eine Kopie der Konto-Schrift in diesem Browser ab
+  (`handwriting-glyphs-account-<user-id>`). Ohne Internet lädt die App diese Kopie – auch wenn die Sitzung offline
+  nicht erneuert werden kann – und das Umwandeln funktioniert wie gewohnt. Neue Zeichen lassen sich offline nicht
+  speichern; geänderte Einstellungen werden beim nächsten Laden mit Internet ins Konto übertragen. Beim Abmelden
+  wird die Kopie gelöscht.
 
 ## Entwicklung
 
@@ -117,7 +122,8 @@ Reverse-engineered aus Goodnotes-6-Exporten; Details in den Kommentaren unter `s
   Goodnotes-Datei passiert vollständig im Browser – der eingegebene Text verlässt das Gerät nie.
 - Mit registriertem Konto werden nur die Schriftproben (Strich-Koordinaten pro Zeichen) und die genannten
   Einstellungen in der Datenbank des yezun.de-Kontos gespeichert, nur für dich lesbar (Row Level Security).
-  Gast-Sitzungen speichern nichts auf dem Server.
+  Gast-Sitzungen speichern nichts auf dem Server. Für die Offline-Nutzung bleibt eine Kopie dieser Schriftproben im
+  Browser, bis du dich abmeldest.
 - Beim Löschen des Kontos (Konto-Seite) werden alle Schriftdaten mitgelöscht. Lokale Daten lassen sich über die
   Website-Daten des Browsers entfernen.
 - Keine Tracker, keine Analyse, keine Drittanbieter-Skripte.
