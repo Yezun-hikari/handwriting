@@ -7,13 +7,11 @@ import { DB_LIMITS, toGlyph, validChar, validVariant } from './validate.ts';
 /**
  * Account-backed store on the shared yezun.de Supabase project (client from `@yezun/konto`'s getClient()).
  * Table `handwriting_glyphs` (migration in the konto repo, supabase/migrations/*_handwriting.sql):
- *   pk (user_id, char, variant), char 1..8 code points, variant 0..9, strokes jsonb (≤ 64 KiB), advance real 0..10,
+ *   pk (user_id, char, variant), char/variant/advance/strokes limits as in DB_LIMITS (validate.ts),
  *   updated_at set by a trigger. RLS: own rows only, registered (non-anonymous) users only.
  * Only the `from` method of the client is used, so tests can pass a small fake.
  */
 export type DbClient = Pick<SupabaseClient, 'from'>;
-/** @deprecated old name; the real supabase-js client is accepted directly now. */
-export type SupabaseClientLike = DbClient;
 
 export const GLYPH_TABLE = 'handwriting_glyphs';
 const CONFLICT = 'user_id,char,variant';

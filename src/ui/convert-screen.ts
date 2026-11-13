@@ -133,7 +133,7 @@ export function createConvertScreen(deps: ConvertDeps = convertDeps): Screen {
         const t = text.value;
         checkLength();
         try {
-          localStorage.setItem(DRAFT_KEY, t.slice(0, 20000));
+          localStorage.setItem(DRAFT_KEY, t.slice(0, MAX_TEXT_CHARS));
         } catch {
           /* ignore */
         }

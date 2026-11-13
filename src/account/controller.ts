@@ -95,6 +95,8 @@ export interface AccountDeps {
 }
 
 export const mergeMemoryKey = (userId: string): string => `handwriting-merge-${userId}`;
+/** '1' while a settings change of this user has not reached the account yet (tab closed before the debounced push). */
+export const settingsDirtyKey = (userId: string): string => `handwriting-settings-dirty-${userId}`;
 
 export class AccountController {
   private state: AccountState | null = null;
@@ -141,6 +143,7 @@ export class AccountController {
     this.off?.();
     this.off = null;
     this.d.settings.setSink(null);
+    this.clearSettingsTimer();
   }
 
   /** Switch to the state of `user`; no-op if unchanged. */
@@ -177,7 +180,7 @@ export class AccountController {
     }
     if (this.stale(gen)) return;
 
-    await this.syncSettings(settings, gen);
+    await this.syncSettings(settings, userId, gen);
     if (this.stale(gen) || !loaded) return;
     await this.offerUpload(userId, glyphs, gen);
   }
@@ -187,14 +190,32 @@ export class AccountController {
     this.settingsTimer = null;
   }
 
-  private async syncSettings(store: RemoteSettingsStore, gen: number): Promise<void> {
+  private setDirty(userId: string, dirty: boolean): void {
+    try {
+      this.d.memory.setItem(settingsDirtyKey(userId), dirty ? '1' : '');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private isDirty(userId: string): boolean {
+    try {
+      return this.d.memory.getItem(settingsDirtyKey(userId)) === '1';
+    } catch {
+      return false;
+    }
+  }
+
+  private async syncSettings(store: RemoteSettingsStore, userId: string, gen: number): Promise<void> {
     try {
       const remote = await store.load();
       if (this.stale(gen)) return;
-      if (remote && Object.keys(remote).length) {
+      if (remote && Object.keys(remote).length && !this.isDirty(userId)) {
         if (this.d.settings.apply(remote)) this.d.onSettingsApplied();
       } else {
-        await store.save(this.d.settings.current()); // first sign-in: the account takes this device's settings
+        // First sign-in, or a local change that never reached the account: the account takes this device's settings.
+        await store.save(this.d.settings.current());
+        this.setDirty(userId, false);
       }
     } catch (e) {
       if (!this.stale(gen)) this.d.notify(`Einstellungen aus dem Konto nicht verfügbar. ${describeStoreError(e)}`, 'error');
@@ -202,10 +223,14 @@ export class AccountController {
     if (this.stale(gen)) return;
     this.d.settings.setSink((s) => {
       this.clearSettingsTimer();
+      this.setDirty(userId, true);
       this.settingsTimer = setTimeout(() => {
         this.settingsTimer = null;
         if (this.stale(gen)) return;
-        store.save(s).catch((e) => this.d.notify(`Einstellungen nicht im Konto gespeichert. ${describeStoreError(e)}`, 'error'));
+        store.save(s).then(
+          () => this.settingsTimer || this.setDirty(userId, false), // a newer change is still pending: stay dirty
+          (e) => this.d.notify(`Einstellungen nicht im Konto gespeichert. ${describeStoreError(e)}`, 'error'),
+        );
       }, this.d.settingsDebounceMs ?? 800);
     });
   }

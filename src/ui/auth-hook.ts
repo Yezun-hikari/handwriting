@@ -18,9 +18,6 @@ const HINT_ATTR = 'data-storage-hint';
 
 export const getAccountState = (): AccountState => controller?.current ?? { status: 'unconfigured' };
 
-/** Text shown where the storage location matters. */
-export const storageHint = (s: AccountState = getAccountState()): string => storageHintText(s);
-
 /** A paragraph with the storage hint that updates itself on sign-in / sign-out (plus login link when useful). */
 export function storageHintEl(): HTMLElement {
   const el = h('p', { class: 'muted small storage-hint', [HINT_ATTR]: '' });
